@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat UI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/default.min.css">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+
+<body>
+    <div id="wrapper">
+        <aside id="sidebar">
+            <button id="new-chat-button">New Chat</button>
+            <!-- Sidebar content such as thread list goes here -->
+        </aside>
+        <section id="main-content">
+            <header id="chat-header">
+                <!-- Chat header content like topic or user info goes here -->
+            </header>
+            <div id="chat-area">
+                <!-- Chat messages will appear here -->
+            </div>
+            <footer id="chat-footer">
+                <label for="file-input" id="file-label">📎</label>
+                <input type="text" id="message-input" placeholder="Type your message here...">
+                <input type="file" id="file-input" style="display: none;">
+                <button id="send-button">Send</button>
+            </footer>
+        </section>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/highlight.min.js"></script>
+    <script src="/static/script.js"></script>
+</body>
+
+</html>

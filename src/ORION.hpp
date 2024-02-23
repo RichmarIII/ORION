@@ -1,0 +1,1 @@
+// Simulated Assistant.hpp content
