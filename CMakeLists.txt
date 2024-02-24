@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.8)
 
+# Set the cmake toolchain file to use
+set(CMAKE_TOOLCHAIN_FILE "/mnt/Apps/Dev/Repositories/vcpkg/scripts/buildsystems/vcpkg.cmake")
+
 project(ORION VERSION 1.0 DESCRIPTION "Operational Reasoning and Intelligence Optimized Nexus")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -19,5 +22,25 @@ set(SOURCES
 add_executable(ORION ${SOURCES})
 
 # If you need to link against libraries, do so here
-find_package(cpprestsdk REQUIRED)
-target_link_libraries(ORION PRIVATE cpprestsdk::cpprest)
+find_package(cpprestsdk CONFIG REQUIRED)
+target_link_libraries(ORION PRIVATE cpprestsdk::cpprest cpprestsdk::cpprestsdk_zlib_internal cpprestsdk::cpprestsdk_boost_internal cpprestsdk::cpprestsdk_openssl_internal)
+
+
+# Copy the files to the executable directory recursively
+add_custom_command(TARGET ORION POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_SOURCE_DIR}/.openai_api_key.txt
+    $<TARGET_FILE_DIR:ORION>/.openai_api_key.txt
+
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_SOURCE_DIR}/.openweather_api_key.txt
+    $<TARGET_FILE_DIR:ORION>/.openweather_api_key.txt
+
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/templates
+    $<TARGET_FILE_DIR:ORION>/templates
+
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/static
+    $<TARGET_FILE_DIR:ORION>/static
+)

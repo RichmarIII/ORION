@@ -28,22 +28,6 @@ document.addEventListener('DOMContentLoaded', function()
         source.addEventListener('ai_message_ready', function(e)
         {
             console.log('ai_message_ready', e.data);
-            
-            var chatArea = document.getElementById('chat-area');
-            var newMessage = document.createElement('div');
-            
-            // Parse the json object
-            var data = JSON.parse(e.data);
-            
-            newMessage.innerHTML = data.message;
-            chatArea.appendChild(newMessage);
-
-            // Call function to process the newly added message for code blocks and add copy buttons
-            processCodeBlocks(newMessage);
-
-            // Scroll to the bottom of the chat area
-            chatArea.scrollTop = chatArea.scrollHeight;
-
         },false);
     }
     else
@@ -97,24 +81,30 @@ async function addMessageToChat(message, files)
         var message_json = JSON.stringify({ message: message });
 
         // Fetch markdown from the server
-        await fetch('/message_to_markdown', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: message_json
-        })
-        .then(response => response.json())
-        .then(data => {
-            var newMessage = document.createElement('div');
-            newMessage.innerHTML = data.message;
-            chatArea.appendChild(newMessage);
-            processCodeBlocks(newMessage);
-            chatArea.scrollTop = chatArea.scrollHeight;
-        }).catch(error => {
-            console.error('Error:', error);
-            alert('Failed to convert message to markdown: ' + error);
-        });
+        // await fetch('/message_to_markdown', {
+        //     method: 'POST',
+        //     headers: {
+        //         'Content-Type': 'application/json'
+        //     },
+        //     body: message_json
+        // })
+        // .then(response => response.json())
+        // .then(data => {
+        //     var newMessage = document.createElement('div');
+        //     newMessage.innerHTML = data.message;
+        //     chatArea.appendChild(newMessage);
+        //     processCodeBlocks(newMessage);
+        //     chatArea.scrollTop = chatArea.scrollHeight;
+        // }).catch(error => {
+        //     console.error('Error:', error);
+        //     alert('Failed to convert message to markdown: ' + error);
+        // });
+
+        var newMessage = document.createElement('div');
+        newMessage.innerHTML = message;
+        chatArea.appendChild(newMessage);
+        processCodeBlocks(newMessage);
+        chatArea.scrollTop = chatArea.scrollHeight;
 
         // Send the message to the server
         await fetch('/send_message', {
@@ -123,6 +113,26 @@ async function addMessageToChat(message, files)
                 'Content-Type': 'application/json'
             },
             body: message_json
+        }).then(response => response.json())
+        .then(data => {
+            var chatArea = document.getElementById('chat-area');
+            var newMessage = document.createElement('div');
+            
+            // Parse the json object (array of strings) and add each string as a new message (div element
+            data.messages.forEach(message => {
+                var newMessage = document.createElement('div');
+                newMessage.textContent = message;
+                chatArea.appendChild(newMessage);
+
+                // Process the new message for code blocks and add copy buttons
+                processCodeBlocks(newMessage);
+            } );
+
+            // Scroll to the bottom of the chat area
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }).catch(error => {
+            console.error('Error:', error);
+            alert('Failed to send message: ' + error);
         });
     }
 }
