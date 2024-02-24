@@ -4,8 +4,6 @@
 
 Put simply - ORON is a state-of-the-art **Digital Assistant** that is backed by **Machine-Learning**.
 
-Further - ORION is not just a name; it's a beacon guiding us through the uncharted territories of the digital cosmos. Inspired by the constellation that has captivated human imagination for millennia, ORION stands as a symbol of exploration, mystery, and the relentless pursuit of knowledge. In the vastness of space, ORION has been a constant, guiding light, and in the realm of technology, it aims to be no different. Embodied as an AI digital assistant and companion, ORION is designed to navigate alongside you through the complexities and wonders of daily life and digital challenges. It's more than a tool; it's a partner in the quest for discovery, offering personalized assistance, insights, and companionship in every interaction. With ORION, the age-old human endeavor for exploration and understanding continues, merging the ancient with the cutting-edge in a seamless blend of past and future.
-
 ## The Essence of ORION
 
 **Operational Reasoning and Intelligence Optimized Nexus** encapsulates the core functionalities and the innovative spirit of our AI assistant. ORION is designed to be at the intersection of operational excellence and intelligent decision-making, providing an optimized nexus for users to navigate the complexities of the digital world.
