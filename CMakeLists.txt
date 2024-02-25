@@ -14,7 +14,13 @@ include_directories(include)
 # Explicitly list your source files
 set(SOURCES
     src/main.cpp
-    src/ORION.cpp
+    src/Orion.cpp
+    src/tools/TakeScreenshotFunctionTool.cpp
+    src/tools/SearchFilesystemFunctionTool.cpp
+    src/tools/GetWeatherFunctionTool.cpp
+    src/tools/WebSearchFunctionTool.cpp
+    src/tools/ChangeVoiceFunctionTool.cpp
+    src/tools/ChangeIntelligenceFunctionTool.cpp
     # Add all source files here
 )
 
@@ -23,7 +29,9 @@ add_executable(ORION ${SOURCES})
 
 # If you need to link against libraries, do so here
 find_package(cpprestsdk CONFIG REQUIRED)
-target_link_libraries(ORION PRIVATE cpprestsdk::cpprest cpprestsdk::cpprestsdk_zlib_internal cpprestsdk::cpprestsdk_boost_internal cpprestsdk::cpprestsdk_openssl_internal)
+find_package(cmark CONFIG REQUIRED)
+
+target_link_libraries(ORION PRIVATE cpprestsdk::cpprest cpprestsdk::cpprestsdk_zlib_internal cpprestsdk::cpprestsdk_boost_internal cpprestsdk::cpprestsdk_openssl_internal cmark::cmark_static)
 
 
 # Copy the files to the executable directory recursively
