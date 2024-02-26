@@ -24,7 +24,7 @@ namespace ORION
                         },
                         "search_directory" : {
                             "type" : "string",
-                            "description" : "The directory to search in. Absolute path"
+                            "description" : "The directory to search in. Absolute path, Default is the users home directory $HOME"
                         },
                         "recursive" : {
                             "type" : "boolean",

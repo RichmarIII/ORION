@@ -19,8 +19,8 @@
 
 using namespace ORION;
 
-Orion::Orion(std::vector<std::unique_ptr<IOrionTool>>&& tools, const EOrionIntelligence eIntelligence, const EOrionVoice eVoice, const char* szName,
-             const char* szInstructions, const char* szDescription)
+Orion::Orion(const std::string& ID, std::vector<std::unique_ptr<IOrionTool>>&& tools, const EOrionIntelligence eIntelligence,
+             const EOrionVoice eVoice, const char* szName, const char* szInstructions, const char* szDescription)
     : m_Tools(std::move(tools)),
       m_CurrentIntelligence(eIntelligence),
       m_CurrentVoice(eVoice),
@@ -29,264 +29,234 @@ Orion::Orion(std::vector<std::unique_ptr<IOrionTool>>&& tools, const EOrionIntel
       m_Description(szDescription)
 {
     m_Instructions = "Your name is " + m_Name + ". " + m_Instructions;
+
+    // Generate a guid for the Orion instance
+    if (!ID.empty())
+    {
+        m_CurrentAssistantID = ID;
+    }
 }
 
-void Orion::Run()
+bool ORION::Orion::Initialize()
 {
-    // Create a new OpenAI client
     CreateClient();
-
-    // Create assistant
     CreateAssistant();
-
-    // Create a thread
     CreateThread();
 
-    // Create a web server and start listening for requests using cpprestsdk
-
-    web::http::experimental::listener::http_listener listener("http://localhost:5000");
-
-    // Add a listener for GET requests
-    listener.support(web::http::methods::GET, std::bind(&Orion::HandleGetRequest, this, std::placeholders::_1));
-
-    // Add a listener for POST requests
-    listener.support(web::http::methods::POST, std::bind(&Orion::HandlePostRequest, this, std::placeholders::_1));
-
-    // Start listening for requests
-    listener.open().then([&]() { std::cout << "Listening for requests at http://localhost:5000" << std::endl; });
-
-    // Set the running flag to true
-    m_Running = true;
-
-    // Wait for the condition variable to stop the server
-    {
-        std::unique_lock<std::mutex> lock(m_Mutex);
-        cv.wait(lock, [&]() { return !m_Running; });
-    }
-
-    // Close the listener
-    listener.close().then([&]() { std::cout << "Stopped listening for requests" << std::endl; });
+    return true;
 }
 
-void Orion::Shutdown()
-{
-    // Set the running flag to false
-    m_Running = false;
-
-    // Notify the condition variable
-    cv.notify_one();
-}
-
-std::vector<std::string> Orion::SendMessage(const std::string& message)
+pplx::task<std::string> Orion::SendMessageAsync(const std::string& message)
 {
     // Create a message in the openai thread
-    web::http::http_request request(web::http::methods::POST);
-    request.set_request_uri(U("threads/" + m_CurrentThreadID + "/messages"));
-    request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    request.headers().add("OpenAI-Beta", "assistants=v1");
-    request.headers().add("Content-Type", "application/json");
+    web::http::http_request CreateMessageRequest(web::http::methods::POST);
+    CreateMessageRequest.set_request_uri(U("threads/" + m_CurrentThreadID + "/messages"));
+    CreateMessageRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+    CreateMessageRequest.headers().add("OpenAI-Beta", "assistants=v1");
+    CreateMessageRequest.headers().add("Content-Type", "application/json");
 
-    web::json::value body = web::json::value::object();
-    body["content"]       = web::json::value::string(message);
-    body["role"]          = web::json::value::string("user");
-    request.set_body(body);
+    web::json::value CreateMessageBody = web::json::value::object();
+    CreateMessageBody["content"]       = web::json::value::string(message);
+    CreateMessageBody["role"]          = web::json::value::string("user");
+    CreateMessageRequest.set_body(CreateMessageBody);
 
-    web::http::http_response response = m_OpenAIClient->request(request).get();
-
-    if (response.status_code() != web::http::status_codes::OK)
-    {
-        std::cerr << "Failed to create a new message" << std::endl;
-        std::cout << response.to_string() << std::endl;
-        return {};
-    }
-
-    // run the assistant
-    request = web::http::http_request(web::http::methods::POST);
-    request.set_request_uri(U("threads/" + m_CurrentThreadID + "/runs"));
-    request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    request.headers().add("OpenAI-Beta", "assistants=v1");
-    request.headers().add("Content-Type", "application/json");
-
-    body                 = web::json::value::object();
-    body["assistant_id"] = web::json::value::string(m_CurrentAssistantID);
-
-    // Set the model to the current model
-    body["model"] = web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
-    request.set_body(body);
-
-    response = m_OpenAIClient->request(request).get();
-
-    if (response.status_code() != web::http::status_codes::OK)
-    {
-        std::cerr << "Failed to run the assistant" << std::endl;
-        std::cout << response.to_string() << std::endl;
-        return {};
-    }
-
-    std::string runID = response.extract_json().get().at("id").as_string();
-
-    // Get the response from the openai assistant
-    while (true)
-    {
-        request = web::http::http_request(web::http::methods::GET);
-        request.set_request_uri(U("threads/" + m_CurrentThreadID + "/runs/" + runID));
-        request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-        request.headers().add("OpenAI-Beta", "assistants=v1");
-
-        response = m_OpenAIClient->request(request).get();
-
-        if (response.status_code() != web::http::status_codes::OK)
-        {
-            std::cerr << "Failed to get the response from the assistant" << std::endl;
-            std::cout << response.to_string() << std::endl;
-            return {};
-        }
-
-        web::json::value json = response.extract_json().get();
-
-        if (json.at("status").as_string() == "completed")
-        {
-            break;
-        }
-        else if (json.at("status").as_string() == "failed")
-        {
-            return {"An error occurred while processing the request"};
-        }
-        else if (json.at("status").as_string() == "expired")
-        {
-            return {"The request has expired"};
-        }
-        else if (json.at("status").as_string() == "cancelled")
-        {
-            return {"The request has been cancelled"};
-        }
-        else if (json.at("status").as_string() == "queued")
-        {
-            // Do nothing
-        }
-        else if (json.at("status").as_string() == "requires_action")
-        {
-            // Check if the thread wants to run a tool
-            web::json::value toolCallResults = web::json::value::array();
-            for (const auto& toolCall : json.at("required_action").at("submit_tool_outputs").at("tool_calls").as_array())
+    return m_OpenAIClient->request(CreateMessageRequest)
+        .then(
+            [this](web::http::http_response createMessageResponse)
             {
-                if (toolCall.at("type").as_string() == "function")
+                if (createMessageResponse.status_code() != web::http::status_codes::OK)
                 {
-                    // Get tool from available tools by name
-                    auto tool = std::find_if(m_Tools.begin(), m_Tools.end(),
-                                             [&](const auto& t) { return t->GetName() == toolCall.at("function").at("name").as_string(); });
-
-                    if (tool != m_Tools.end())
-                    {
-                        // Call the tool
-                        auto pFunctionTool = static_cast<FunctionTool*>(tool->get());
-                        auto arguments     = toolCall.at("function").at("arguments").as_string();
-                        auto output        = pFunctionTool->Execute(*this, web::json::value::parse(arguments));
-
-                        // Append the tool call results
-                        web::json::value toolCallResult         = web::json::value::object();
-                        toolCallResult["tool_call_id"]          = toolCall.at("id");
-                        toolCallResult["output"]                = web::json::value::string(output);
-                        toolCallResults[toolCallResults.size()] = toolCallResult;
-                    }
+                    std::cerr << "Failed to create a new message" << std::endl;
+                    std::cout << createMessageResponse.to_string() << std::endl;
+                    return pplx::task_from_result(std::string("Failed to create a new message: " + createMessageResponse.to_string()));
                 }
-            }
 
-            // Submit the tool call results
-            request = web::http::http_request(web::http::methods::POST);
-            request.set_request_uri(U("threads/" + m_CurrentThreadID + "/runs/" + runID + "/submit_tool_outputs"));
-            request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-            request.headers().add("OpenAI-Beta", "assistants=v1");
-            request.headers().add("Content-Type", "application/json");
+                // run the assistant
+                auto CreateRunRequest = web::http::http_request(web::http::methods::POST);
+                CreateRunRequest.set_request_uri(U("threads/" + m_CurrentThreadID + "/runs"));
+                CreateRunRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+                CreateRunRequest.headers().add("OpenAI-Beta", "assistants=v1");
+                CreateRunRequest.headers().add("Content-Type", "application/json");
 
-            auto tool_outputs            = web::json::value::object();
-            tool_outputs["tool_outputs"] = toolCallResults;
-            request.set_body(tool_outputs);
+                auto CreateRunBody            = web::json::value::object();
+                CreateRunBody["assistant_id"] = web::json::value::string(m_CurrentAssistantID);
 
-            response = m_OpenAIClient->request(request).get();
+                // Set the model to the current model
+                CreateRunBody["model"] =
+                    web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
+                CreateRunRequest.set_body(CreateRunBody);
 
-            if (response.status_code() != web::http::status_codes::OK)
-            {
-                std::cerr << "Failed to submit the tool call results" << std::endl;
-                std::cout << response.to_string() << std::endl;
-                return {};
-            }
-        }
-        else if (json.at("status").as_string() == "in_progress")
-        {
-            // Do nothing
-        }
-        else
-        {
-            std::cerr << "Unknown status: " << json.at("status").as_string() << std::endl;
-            std::cout << response.to_string() << std::endl;
-            return {};
-        }
+                return m_OpenAIClient->request(CreateRunRequest)
+                    .then(
+                        [this](web::http::http_response createRunResponse)
+                        {
+                            if (createRunResponse.status_code() != web::http::status_codes::OK)
+                            {
+                                std::cerr << "Failed to run the assistant" << std::endl;
+                                std::cout << createRunResponse.to_string() << std::endl;
+                                return pplx::task_from_result(std::string("Failed to run the assistant: " + createRunResponse.to_string()));
+                            }
 
-        // Sleep for 1 second before checking the status again
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
+                            std::string runID = createRunResponse.extract_json().get().at("id").as_string();
 
-    // Get new messages from the assistant
-    request = web::http::http_request(web::http::methods::GET);
-    request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    request.headers().add("OpenAI-Beta", "assistants=v1");
-    request.headers().add("Content-Type", "application/json");
+                            // Get the response from the openai assistant
+                            while (true)
+                            {
+                                auto CheckRunStatusRequest = web::http::http_request(web::http::methods::GET);
+                                CheckRunStatusRequest.set_request_uri(U("threads/" + m_CurrentThreadID + "/runs/" + runID));
+                                CheckRunStatusRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+                                CheckRunStatusRequest.headers().add("OpenAI-Beta", "assistants=v1");
 
-    // Set the request URI
-    web::uri_builder builder;
-    builder.append_path("threads/" + m_CurrentThreadID + "/messages");
-    builder.append_query("limit", 5);
-    request.set_request_uri(builder.to_string());
+                                auto CheckRunStatusResponse = m_OpenAIClient->request(CheckRunStatusRequest).get();
 
-    response = m_OpenAIClient->request(request).get();
+                                if (CheckRunStatusResponse.status_code() != web::http::status_codes::OK)
+                                {
+                                    std::cerr << "Failed to get the response from the assistant" << std::endl;
+                                    std::cout << CheckRunStatusResponse.to_string() << std::endl;
+                                    return pplx::task_from_result(
+                                        std::string("Failed to get the response from the assistant: " + CheckRunStatusResponse.to_string()));
+                                }
 
-    if (response.status_code() != web::http::status_codes::OK)
-    {
-        std::cerr << "Failed to get the response from the assistant" << std::endl;
-        return {};
-    }
+                                web::json::value json = CheckRunStatusResponse.extract_json().get();
 
-    web::json::value threadMessages = response.extract_json().get();
+                                if (json.at("status").as_string() == "completed")
+                                {
+                                    break;
+                                }
+                                else if (json.at("status").as_string() == "failed")
+                                {
+                                    return pplx::task_from_result(std::string("The request has failed"));
+                                }
+                                else if (json.at("status").as_string() == "expired")
+                                {
+                                    return pplx::task_from_result(std::string("The request has expired"));
+                                }
+                                else if (json.at("status").as_string() == "cancelled")
+                                {
+                                    return pplx::task_from_result(std::string("The request has been cancelled"));
+                                }
+                                else if (json.at("status").as_string() == "queued")
+                                {
+                                    // Do nothing
+                                }
+                                else if (json.at("status").as_string() == "requires_action")
+                                {
+                                    // Check if the thread wants to run a tool
+                                    web::json::value toolCallResults = web::json::value::array();
+                                    for (const auto& toolCall : json.at("required_action").at("submit_tool_outputs").at("tool_calls").as_array())
+                                    {
+                                        if (toolCall.at("type").as_string() == "function")
+                                        {
+                                            // Get tool from available tools by name
+                                            auto tool = std::find_if(m_Tools.begin(), m_Tools.end(),
+                                                                     [&](const auto& t)
+                                                                     { return t->GetName() == toolCall.at("function").at("name").as_string(); });
 
-    std::vector<std::string> NewMessages;
-    for (const auto& threadMessage : threadMessages.at("data").as_array())
-    {
-        if (threadMessage.at("role").as_string() == "assistant")
-        {
-            for (const auto& content : threadMessage.at("content").as_array())
-            {
-                if (content.at("type").as_string() == "text")
-                {
-                    NewMessages.push_back(content.at("text").at("value").as_string());
-                }
-            }
-        }
-        else if (threadMessage.at("role").as_string() == "user")
-        {
-            break;
-        }
-    }
+                                            if (tool != m_Tools.end())
+                                            {
+                                                // Call the tool
+                                                auto pFunctionTool = static_cast<FunctionTool*>(tool->get());
+                                                auto arguments     = toolCall.at("function").at("arguments").as_string();
+                                                auto output        = pFunctionTool->Execute(*this, web::json::value::parse(arguments));
 
-    // Combine the messages
-    std::string CombinedMessages;
-    for (const auto& message : NewMessages)
-    {
-        CombinedMessages += message;
-    }
+                                                // Append the tool call results
+                                                web::json::value toolCallResult         = web::json::value::object();
+                                                toolCallResult["tool_call_id"]          = toolCall.at("id");
+                                                toolCallResult["output"]                = web::json::value::string(output);
+                                                toolCallResults[toolCallResults.size()] = toolCallResult;
+                                            }
+                                        }
+                                    }
 
-    // Speak the message
-    SpeakAsync(CombinedMessages);
+                                    // Submit the tool call results
+                                    auto SubmitToolOutputsRequest = web::http::http_request(web::http::methods::POST);
+                                    SubmitToolOutputsRequest.set_request_uri(
+                                        U("threads/" + m_CurrentThreadID + "/runs/" + runID + "/submit_tool_outputs"));
+                                    SubmitToolOutputsRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+                                    SubmitToolOutputsRequest.headers().add("OpenAI-Beta", "assistants=v1");
+                                    SubmitToolOutputsRequest.headers().add("Content-Type", "application/json");
 
-    // Use cmark to convert markdown to HTML
-    for (auto& message : NewMessages)
-    {
-        auto szmessage = cmark_markdown_to_html(message.c_str(), message.size(), CMARK_OPT_DEFAULT);
-        message        = szmessage;
-        free(szmessage);
-    }
+                                    auto tool_outputs            = web::json::value::object();
+                                    tool_outputs["tool_outputs"] = toolCallResults;
+                                    SubmitToolOutputsRequest.set_body(tool_outputs);
 
-    return NewMessages;
+                                    auto SubmitToolOutputsResponse = m_OpenAIClient->request(SubmitToolOutputsRequest).get();
+
+                                    if (SubmitToolOutputsResponse.status_code() != web::http::status_codes::OK)
+                                    {
+                                        std::cerr << "Failed to submit the tool call results" << std::endl;
+                                        std::cout << SubmitToolOutputsResponse.to_string() << std::endl;
+                                        return pplx::task_from_result(
+                                            std::string("Failed to submit the tool call results: " + SubmitToolOutputsResponse.to_string()));
+                                    }
+                                }
+                                else if (json.at("status").as_string() == "in_progress")
+                                {
+                                    // Do nothing
+                                }
+                                else
+                                {
+                                    std::cerr << "Unknown status: " << json.at("status").as_string() << std::endl;
+                                    std::cout << CheckRunStatusResponse.to_string() << std::endl;
+                                    return pplx::task_from_result(std::string("Unknown status: " + json.at("status").as_string()));
+                                }
+
+                                // Sleep for 1 second before checking the status again
+                                std::this_thread::sleep_for(std::chrono::seconds(1));
+                            }
+
+                            // Get new messages from the assistant
+                            auto ListMessagesRequest = web::http::http_request(web::http::methods::GET);
+                            ListMessagesRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+                            ListMessagesRequest.headers().add("OpenAI-Beta", "assistants=v1");
+                            ListMessagesRequest.headers().add("Content-Type", "application/json");
+
+                            // Set the request URI
+                            web::uri_builder builder;
+                            builder.append_path("threads/" + m_CurrentThreadID + "/messages");
+                            builder.append_query("limit", 5);
+                            ListMessagesRequest.set_request_uri(builder.to_string());
+
+                            auto ListMessagesResponse = m_OpenAIClient->request(ListMessagesRequest).get();
+
+                            if (ListMessagesResponse.status_code() != web::http::status_codes::OK)
+                            {
+                                std::cerr << "Failed to get the response from the assistant" << std::endl;
+                                return pplx::task_from_result(
+                                    std::string("Failed to get the response from the assistant: " + ListMessagesResponse.to_string()));
+                            }
+
+                            web::json::value threadMessages = ListMessagesResponse.extract_json().get();
+
+                            std::vector<std::string> NewMessages;
+                            for (const auto& threadMessage : threadMessages.at("data").as_array())
+                            {
+                                if (threadMessage.at("role").as_string() == "assistant")
+                                {
+                                    for (const auto& content : threadMessage.at("content").as_array())
+                                    {
+                                        if (content.at("type").as_string() == "text")
+                                        {
+                                            NewMessages.push_back(content.at("text").at("value").as_string());
+                                        }
+                                    }
+                                }
+                                else if (threadMessage.at("role").as_string() == "user")
+                                {
+                                    break;
+                                }
+                            }
+
+                            // Combine the messages
+                            std::string CombinedMessage;
+                            for (const auto& message : NewMessages)
+                            {
+                                CombinedMessage += message + " \n";
+                            }
+
+                            return pplx::task_from_result(CombinedMessage);
+                        });
+            });
 }
 
 void Orion::CreateAssistant()
@@ -299,15 +269,15 @@ void Orion::CreateAssistant()
 
     web::http::http_response response = m_OpenAIClient->request(request).get();
 
+    bool bAssistantExists = false;
     if (response.status_code() == web::http::status_codes::OK)
     {
         web::json::value json = response.extract_json().get();
         for (const auto& assistant : json.at("data").as_array())
         {
-            std::cout << assistant.at("name").serialize();
-            if (assistant.at("name").as_string() == m_Name)
+            if (assistant.at("id").as_string() == m_CurrentAssistantID)
             {
-                m_CurrentAssistantID = assistant.at("id").as_string();
+                bAssistantExists = true;
                 break;
             }
         }
@@ -318,7 +288,7 @@ void Orion::CreateAssistant()
         return;
     }
 
-    if (!m_CurrentAssistantID.empty())
+    if (bAssistantExists)
     {
         // Update the assistant
         web::http::http_request request(web::http::methods::POST);
@@ -423,45 +393,6 @@ void Orion::CreateThread()
     }
 }
 
-void Orion::HandleGetRequest(web::http::http_request request)
-{
-    if (request.request_uri().path() == "/")
-    {
-        // Handle the root request
-        HandleRootRequest(request);
-    }
-    else if (request.request_uri().path() == "/quit")
-    {
-        // Handle the shutdown request
-        HandleShutdownRequest(request);
-    }
-    else
-    {
-        HandleStaticFileRequest(request);
-    }
-}
-
-void Orion::HandlePostRequest(web::http::http_request request)
-{
-    // Check if endpoint is /send_message
-    if (request.request_uri().path() == "/send_message")
-    {
-        // Handle the send message request
-        HandleSendMessageRequest(request);
-    }
-    // Check if endpoint is /message_to_markdown
-    else if (request.request_uri().path() == "/message_to_markdown")
-    {
-        // Handle the message to markdown request
-        HandleMessageToMarkdownRequest(request);
-    }
-    else
-    {
-        // Send a 404 Not Found error to the client
-        request.reply(web::http::status_codes::NotFound, "The requested resource was not found\n");
-    }
-}
-
 void Orion::CreateClient()
 {
     // Create a client to communicate with the OpenAI API
@@ -516,169 +447,6 @@ void Orion::SetNewIntelligence(const EOrionIntelligence intelligence)
     m_CurrentIntelligence = intelligence;
 }
 
-void Orion::HandleSendMessageRequest(web::http::http_request request)
-{
-    // Get the message from the request
-    request.extract_json().then(
-        [=](pplx::task<web::json::value> task)
-        {
-            try
-            {
-                web::json::value json    = task.get();
-                std::string      message = json.at("message").as_string();
-
-                // Send the message to the assistant
-                std::vector<std::string> NewMessages = SendMessage(message);
-
-                if (NewMessages.empty())
-                {
-                    request.reply(web::http::status_codes::BadRequest, "Failed to send the message to the assistant\n");
-                    return;
-                }
-
-                // Create a json array of the new messages
-                web::json::value jsonMessages = web::json::value::array(NewMessages.size());
-                for (size_t i = 0; i < NewMessages.size(); i++)
-                {
-                    jsonMessages[i] = web::json::value::string(NewMessages[i]);
-                }
-
-                // Create a new json object to send to the client
-                web::json::value jsonResponse = web::json::value::object();
-                jsonResponse["messages"]      = jsonMessages;
-
-                // Send the new messages to the client
-                request.reply(web::http::status_codes::OK, jsonResponse);
-            }
-            catch (const std::exception& e)
-            {
-                std::cerr << "Failed to extract the message from the request: " << e.what() << std::endl;
-                // Send a 400 Bad Request error to the client
-                auto json        = web::json::value::object();
-                auto messages    = web::json::value::array(1);
-                messages[0]      = web::json::value::string("Failed to extract the message from the request");
-                json["messages"] = messages;
-                request.reply(web::http::status_codes::BadRequest, json);
-            }
-        });
-}
-
-void Orion::HandleRootRequest(web::http::http_request request)
-{
-    // Render the templates/index.html template and send it to the client
-    std::ifstream indexFile {"templates/index.html"};
-    std::string   indexHTML {std::istreambuf_iterator<char>(indexFile), std::istreambuf_iterator<char>()};
-    request.reply(web::http::status_codes::OK, indexHTML, "text/html");
-}
-
-void Orion::HandleShutdownRequest(web::http::http_request request)
-{
-    // Send a message to the client
-    request.reply(web::http::status_codes::OK, "ORION is shutting down\n");
-
-    // Shutdown the Orion instance
-    Shutdown();
-}
-
-void Orion::HandleStaticFileRequest(web::http::http_request request)
-{
-    // All static files are in the /static directory
-    std::string path = "static" + request.request_uri().path();
-
-    // Check if the file exists
-    if (std::filesystem::exists(path))
-    {
-        // Open the file
-        std::ifstream file {path};
-
-        // Get the file extension
-        std::string extension = path.substr(path.find_last_of('.') + 1);
-
-        // Set the content type based on the file extension
-        std::string contentType;
-        if (extension == "html")
-        {
-            contentType = "text/html";
-        }
-        else if (extension == "css")
-        {
-            contentType = "text/css";
-        }
-        else if (extension == "js")
-        {
-            contentType = "application/javascript";
-        }
-        else if (extension == "png")
-        {
-            contentType = "image/png";
-        }
-        else if (extension == "jpg" || extension == "jpeg")
-        {
-            contentType = "image/jpeg";
-        }
-        else if (extension == "gif")
-        {
-            contentType = "image/gif";
-        }
-        else if (extension == "svg")
-        {
-            contentType = "image/svg+xml";
-        }
-        else if (extension == "ico")
-        {
-            contentType = "image/x-icon";
-        }
-        else
-        {
-            contentType = "text/plain";
-        }
-
-        auto fileContents = std::string {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-
-        // Send the file to the client
-        request.reply(web::http::status_codes::OK, fileContents, contentType);
-    }
-    else
-    {
-        // Send a 404 Not Found error to the client
-        request.reply(web::http::status_codes::NotFound, "The requested resource was not found\n");
-    }
-}
-
-void Orion::HandleMessageToMarkdownRequest(web::http::http_request request)
-{
-    // Get the message from the request
-    request.extract_json().then(
-        [=](pplx::task<web::json::value> task)
-        {
-            try
-            {
-                web::json::value json    = task.get();
-                std::string      message = json.at("message").as_string();
-
-                // Use cmark to convert the message to markdown
-                auto szmessage = cmark_markdown_to_html(message.c_str(), message.size(), CMARK_OPT_DEFAULT);
-                message        = szmessage;
-                free(szmessage);
-
-                // Create a new json object to send to the client
-                web::json::value jsonResponse = web::json::value::object();
-                jsonResponse["message"]       = web::json::value::string(message);
-
-                // Send the new message to the client
-                request.reply(web::http::status_codes::OK, jsonResponse);
-            }
-            catch (const std::exception& e)
-            {
-                std::cerr << "Failed to convert message to markdown: " << e.what() << std::endl;
-
-                // Send a 400 Bad Request error to the client
-                request.reply(web::http::status_codes::BadRequest,
-                              R"({"message": "Failed to convert message to markdown: )" + std::string(e.what()) + R"("})");
-            }
-        });
-}
-
 pplx::task<void> Orion::SpeakAsync(const std::string& message)
 {
     // Create a new http_request to get the speech
@@ -726,18 +494,26 @@ pplx::task<void> Orion::SpeakAsync(const std::string& message)
         {
             if (response.status_code() == web::http::status_codes::OK)
             {
-                return concurrency::streams::fstream::open_ostream("speech.mp3", std::ios::out | std::ios::binary | std::ios::trunc)
+                // Create the audio directory if it doesn't exist
+                std::error_code ec;
+                std::filesystem::create_directory("audio", ec);
+                if (ec)
+                {
+                    std::cerr << "Failed to create the audio directory" << std::endl;
+                    return pplx::task_from_result();
+                }
+
+                // Generate a unique filename for the speech
+                std::string FileName = "audio/speech_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) + ".mp3";
+                return concurrency::streams::fstream::open_ostream(FileName, std::ios::out | std::ios::binary | std::ios::trunc)
                     .then([=](concurrency::streams::ostream fileStream) { return response.body().read_to_end(fileStream.streambuf()); })
                     .then(
                         [=](size_t)
                         {
-                            std::cout << "File downloaded to speech.mp3" << std::endl;
-
-                // Play the speech
-
-#if defined(__unix__) || defined(__unix) || defined(__APPLE__)
+            // Play the speech
+#if defined(__unix__)
                             // TODO: Not cross-platform
-                            std::string command = "mpg123 speech.mp3";
+                            std::string command = "mpg123 " + FileName;
                             system(command.c_str());
 #endif
                         });
@@ -748,6 +524,74 @@ pplx::task<void> Orion::SpeakAsync(const std::string& message)
                 std::cout << response.to_string() << std::endl;
 
                 return pplx::task_from_result();
+            }
+        });
+}
+
+pplx::task<web::json::value> Orion::GetChatHistoryAsync()
+{
+    // Create a new http_request to get the chat history
+    web::http::http_request request(web::http::methods::GET);
+    request.set_request_uri(U("threads/" + m_CurrentThreadID + "/messages"));
+    request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+    request.headers().add("OpenAI-Beta", "assistants=v1");
+
+    // Check if the query parameter is present
+    bool bMarkdown = request.request_uri().query().find(U("markdown=true")) != std::string::npos;
+
+    // Send the request and get the response
+    return m_OpenAIClient->request(request).then(
+        [=](web::http::http_response response)
+        {
+            if (response.status_code() == web::http::status_codes::OK)
+            {
+                return response.extract_json()
+                    .then([=](pplx::task<web::json::value> task) { return task.get(); })
+                    .then(
+                        [=](web::json::value json)
+                        {
+                            auto JData = json.at("data").as_array();
+
+                            auto JChatHistory = web::json::value::object();
+                            for (const auto& Message : JData)
+                            {
+                                // Our assistant is always the orion role in the chat history
+                                auto Role = Message.at("role").as_string();
+                                Role      = Role == "assistant" ? "orion" : Role;
+
+                                for (const auto& Content : Message.at("content").as_array())
+                                {
+                                    if (Content.at("type").as_string() == "text")
+                                    {
+                                        // Add the message to the chat history
+                                        auto Message = Content.at("text").at("value").as_string();
+
+                                        if (bMarkdown)
+                                        {
+                                            auto szMarkdown = cmark_markdown_to_html(Message.c_str(), Message.length(), CMARK_OPT_DEFAULT);
+                                            Message         = szMarkdown;
+                                            free(szMarkdown);
+                                        }
+
+                                        auto JMessage       = web::json::value::object();
+                                        JMessage["message"] = web::json::value::string(Message);
+                                        JMessage["role"]    = web::json::value::string("orion");
+
+                                        // Add the message to the chat history
+                                        JChatHistory[JChatHistory.size()] = JMessage;
+                                    }
+                                }
+                            }
+
+                            return JChatHistory;
+                        });
+            }
+            else
+            {
+                std::cerr << "Failed to get the chat history" << std::endl;
+                std::cout << response.to_string() << std::endl;
+
+                return pplx::task_from_result(web::json::value::object());
             }
         });
 }

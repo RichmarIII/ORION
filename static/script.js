@@ -34,6 +34,50 @@ document.addEventListener('DOMContentLoaded', function()
     {
         console.log("Your browser does not support Server-Sent Events.");
     }
+
+    // Check for existing Orion ID in the local storage
+    var orion_id = localStorage.getItem('orion_id');
+    if (orion_id)
+    {
+        console.log('Orion ID found in local storage:', orion_id);
+    }
+    else
+    {
+        console.log('No Orion ID found in local storage');
+    }
+
+    if (orion_id)
+    {
+        // Orion ID needs to be sent to the server via query parameter
+        // Fetch the Orion details from the server
+        fetch('/create_orion?id=' + orion_id, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }).then(response => response.json()).then(data => {
+            console.log('Orion details:', data);
+        }).catch(error => {
+            console.error('Error:', error);
+            alert('Failed to get Orion details: ' + error);
+        });
+    }
+    else
+    {
+        // Fetch the Orion details from the server
+        fetch('/create_orion', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }).then(response => response.json()).then(data => {
+            console.log('Orion details:', data);
+            localStorage.setItem('orion_id', data.id);
+        }).catch(error => {
+            console.error('Error:', error);
+            alert('Failed to get Orion details: ' + error);
+        });
+    }
 });
 
 // Function to process the newly added message for code blocks and add copy buttons
@@ -79,21 +123,18 @@ async function addMessageToChat(message, files)
     {
         var chatArea = document.getElementById('chat-area');
 
-        // create message json object
-        message_json = JSON.stringify({ message: message });
-
         //Fetch markdown from the server
-        await fetch('/message_to_markdown', {
+        await fetch('/markdown', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'text/plain'
             },
-            body: message_json
+            body: message
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(response => response.text())
+        .then(markdown => {
             var newMessage = document.createElement('div');
-            newMessage.innerHTML = data.message;
+            newMessage.innerHTML = markdown;
             chatArea.appendChild(newMessage);
             processCodeBlocks(newMessage);
             chatArea.scrollTop = chatArea.scrollHeight;
@@ -103,26 +144,24 @@ async function addMessageToChat(message, files)
         });
 
         // Send the message to the server
-        await fetch('/send_message', {
+        await fetch('/send_message?markdown=true', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'text/plain',
+                'X-Orion-Id': localStorage.getItem('orion_id')
             },
-            body: message_json
-        }).then(response => response.json())
-        .then(data => {
+            body: message
+        }).then(response => response.text())
+        .then(message => {
             var chatArea = document.getElementById('chat-area');
             var newMessage = document.createElement('div');
-            
-            // Parse the json object (array of strings) and add each string as a new message (div element
-            data.messages.forEach(message => {
-                var newMessage = document.createElement('div');
-                newMessage.innerHTML = message;
-                chatArea.appendChild(newMessage);
 
-                // Process the new message for code blocks and add copy buttons
-                processCodeBlocks(newMessage);
-            } );
+            // Add the new message to the chat area
+            newMessage.innerHTML = message;
+            chatArea.appendChild(newMessage);
+
+            // Process the new message for code blocks and add copy buttons
+            processCodeBlocks(newMessage);
 
             // Scroll to the bottom of the chat area
             chatArea.scrollTop = chatArea.scrollHeight;

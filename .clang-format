@@ -29,7 +29,7 @@ ColumnLimit: 150
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 DerivePointerAlignment: false
 IndentCaseLabels: true
-IndentPPDirectives: None
+IndentPPDirectives: BeforeHash
 IndentWrappedFunctionNames: false
 KeepEmptyLinesAtTheStartOfBlocks: false
 NamespaceIndentation: All

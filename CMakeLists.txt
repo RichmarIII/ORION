@@ -15,6 +15,7 @@ include_directories(include)
 set(SOURCES
     src/main.cpp
     src/Orion.cpp
+    src/OrionWebServer.cpp
     src/tools/TakeScreenshotFunctionTool.cpp
     src/tools/SearchFilesystemFunctionTool.cpp
     src/tools/GetWeatherFunctionTool.cpp

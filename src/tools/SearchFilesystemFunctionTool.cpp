@@ -19,6 +19,13 @@ std::string SearchFilesystemFunctionTool::Execute(Orion& orion, const web::json:
             SearchDirectory = parameters.at("search_directory").as_string();
         }
 
+        // Check if directory exists
+        if (!std::filesystem::exists(SearchDirectory))
+        {
+            std::cerr << "Directory does not exist: " << SearchDirectory << std::endl;
+            return std::string(R"({"message": "Directory does not exist"})");
+        }
+
         bool Recursive = false;
         if (parameters.has_field("recursive"))
         {

@@ -10,10 +10,10 @@
 #include <cpprest/http_client.h>
 #include <cpprest/json.h>
 
+#include "IOrionTool.hpp"
+
 namespace ORION
 {
-    struct IOrionTool;
-
     /// @brief The type of voice that ORION supports
     enum class EOrionVoice : uint8_t
     {
@@ -102,9 +102,22 @@ namespace ORION
             constexpr static const EOrionVoice Voice = EOrionVoice::Default;
         };
 
-        Orion(std::vector<std::unique_ptr<IOrionTool>>&& tools = {}, const EOrionIntelligence eIntelligence = Defaults::Intelligence,
-              const EOrionVoice eVoice = Defaults::Voice, const char* szName = Defaults::Name, const char* szInstructions = Defaults::Instructions,
+        /// @brief  Constructor
+        /// @param  tools The tools to use
+        /// @param  szID The ID of the Orion instance
+        /// @param  eIntelligence The intelligence to use
+        /// @param  eVoice The voice to use
+        /// @param  szName The name of the Orion instance
+        /// @param  szInstructions The instructions for the Orion instance
+        /// @param  szDescription The description of the Orion instance
+        Orion(const std::string& ID = "", std::vector<std::unique_ptr<IOrionTool>>&& tools = {},
+              const EOrionIntelligence eIntelligence = Defaults::Intelligence, const EOrionVoice eVoice = Defaults::Voice,
+              const char* szName = Defaults::Name, const char* szInstructions = Defaults::Instructions,
               const char* szDescription = Defaults::Description);
+
+        /// @brief  Initialize the Orion instance.
+        /// @return Whether the Orion instance was initialized successfully
+        bool Initialize();
 
         /// @brief  Run the Orion instance and start listening for requests from
         /// clients on a separate thread. This function will block the current
@@ -116,10 +129,10 @@ namespace ORION
         /// @note   This function is thread-safe
         void Shutdown();
 
-        /// @brief  Send a message to the server
+        /// @brief  Send a message to the server asynchronously
         /// @param  message The message to send
         /// @return The response from the server
-        std::vector<std::string> SendMessage(const std::string& message);
+        pplx::task<std::string> SendMessageAsync(const std::string& message);
 
         /// @brief  Speak a message asynchronously
         /// @param  message The message to speak
@@ -161,37 +174,11 @@ namespace ORION
             return m_OpenWeatherAPIKey;
         }
 
+        /// @brief  Get the chat history asynchronously
+        /// @return The chat history
+        pplx::task<web::json::value> GetChatHistoryAsync();
+
     protected:
-        /// @brief  Handle a GET request. This function is invoked on a separate
-        /// thread
-        /// @param  request The request to handle
-        void HandleGetRequest(web::http::http_request request);
-
-        /// @brief  Handle a POST request. This function is invoked on a separate
-        /// thread
-        /// @param  request The request to handle
-        void HandlePostRequest(web::http::http_request request);
-
-        /// @brief  Handle "send_message" requests
-        /// @param  request The request to handle
-        void HandleSendMessageRequest(web::http::http_request request);
-
-        /// @brief  Handle "/message_to_markdown" requests
-        /// @param  request The request to handle
-        void HandleMessageToMarkdownRequest(web::http::http_request request);
-
-        /// @brief  Handle "/" requests
-        /// @param  request The request to handle
-        void HandleRootRequest(web::http::http_request request);
-
-        /// @brief  Handle "/shutdown" requests
-        /// @param  request The request to handle
-        void HandleShutdownRequest(web::http::http_request request);
-
-        /// @brief  Handle static file requests
-        /// @param  request The request to handle
-        void HandleStaticFileRequest(web::http::http_request request);
-
         /// @brief  Create a client to communicate with the OpenAI API
         void CreateClient();
 
@@ -212,15 +199,6 @@ namespace ORION
         std::string                              m_CurrentThreadID;
         EOrionVoice                              m_CurrentVoice;
         EOrionIntelligence                       m_CurrentIntelligence;
-
-        /// @brief Used to notify the server to stop
-        std::condition_variable cv;
-
-        /// @brief Used to lock the server while it is running
-        std::mutex m_Mutex;
-
-        /// @brief Whether the server is running
-        std::atomic<bool> m_Running = false;
 
         /// @brief The client used to communicate with the OpenAI API
         std::unique_ptr<web::http::client::http_client> m_OpenAIClient;
