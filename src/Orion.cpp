@@ -16,6 +16,7 @@
 #include <chrono>
 #include <thread>
 #include <filesystem>
+#include <cpprest/http_msg.h>
 
 using namespace ORION;
 
@@ -447,85 +448,57 @@ void Orion::SetNewIntelligence(const EOrionIntelligence intelligence)
     m_CurrentIntelligence = intelligence;
 }
 
-pplx::task<void> Orion::SpeakAsync(const std::string& message)
+pplx::task<web::json::value> Orion::SpeakAsync(const std::string& message, const ETTSAudioFormat eaudioFormat)
 {
-    // Create a new http_request to get the speech
-    web::http::http_request request(web::http::methods::POST);
-    request.set_request_uri(U("audio/speech"));
-    request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    request.headers().add("Content-Type", "application/json");
-
-    // Add the body to the request
-    web::json::value body = web::json::value::object();
-    body["model"]         = web::json::value::string("tts-1");
-    body["input"]         = web::json::value::string(message);
-
-    // Set the voice based on the current voice
-    if (m_CurrentVoice == EOrionVoice::Alloy)
+    // Split the message into multiple messages if it's too long (2048). But only on spaces
+    std::vector<std::string> Messages;
+    if (message.size() > 2048)
     {
-        body["voice"] = web::json::value::string("alloy");
-    }
-    else if (m_CurrentVoice == EOrionVoice::Echo)
-    {
-        body["voice"] = web::json::value::string("echo");
-    }
-    else if (m_CurrentVoice == EOrionVoice::Fable)
-    {
-        body["voice"] = web::json::value::string("fable");
-    }
-    else if (m_CurrentVoice == EOrionVoice::Nova)
-    {
-        body["voice"] = web::json::value::string("nova");
-    }
-    else if (m_CurrentVoice == EOrionVoice::Onyx)
-    {
-        body["voice"] = web::json::value::string("onyx");
-    }
-    else if (m_CurrentVoice == EOrionVoice::Shimmer)
-    {
-        body["voice"] = web::json::value::string("shimmer");
-    }
-
-    request.set_body(body);
-
-    // Send the request and get the response
-    return m_OpenAIClient->request(request).then(
-        [=](web::http::http_response response)
+        size_t Start = 0;
+        size_t End   = 0;
+        while (End < message.size())
         {
-            if (response.status_code() == web::http::status_codes::OK)
+            End = Start + 2048;
+            if (End < message.size())
             {
-                // Create the audio directory if it doesn't exist
-                std::error_code ec;
-                std::filesystem::create_directory("audio", ec);
-                if (ec)
+                while (message[End] != ' ')
                 {
-                    std::cerr << "Failed to create the audio directory" << std::endl;
-                    return pplx::task_from_result();
+                    End--;
+                }
+            }
+            Messages.push_back(message.substr(Start, End - Start));
+            Start = End;
+        }
+    }
+    else
+    {
+        Messages.push_back(message);
+    }
+
+    // Create a task for each message
+    std::vector<pplx::task<web::json::value>> Tasks;
+    for (const auto& Message : Messages)
+    {
+        Tasks.push_back(SpeakSingleAsync(Message, eaudioFormat));
+    }
+
+    // When all the tasks are complete, return the results
+    return pplx::when_all(Tasks.begin(), Tasks.end())
+        .then(
+            [](std::vector<web::json::value> results)
+            {
+                // Format: { "files": [ { "file": "audio1.mp3", "type": "audio/mpeg" }, { "file": "audio2.opus", "type": "audio/ogg" } ] }
+                web::json::value JFiles = web::json::value::array();
+                for (const auto& result : results)
+                {
+                    JFiles[JFiles.size()] = result;
                 }
 
-                // Generate a unique filename for the speech
-                std::string FileName = "audio/speech_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) + ".mp3";
-                return concurrency::streams::fstream::open_ostream(FileName, std::ios::out | std::ios::binary | std::ios::trunc)
-                    .then([=](concurrency::streams::ostream fileStream) { return response.body().read_to_end(fileStream.streambuf()); })
-                    .then(
-                        [=](size_t)
-                        {
-            // Play the speech
-#if defined(__unix__)
-                            // TODO: Not cross-platform
-                            std::string command = "mpg123 " + FileName;
-                            system(command.c_str());
-#endif
-                        });
-            }
-            else
-            {
-                std::cerr << "Failed to get the speech" << std::endl;
-                std::cout << response.to_string() << std::endl;
+                web::json::value JResponse = web::json::value::object();
+                JResponse["files"]         = JFiles;
 
-                return pplx::task_from_result();
-            }
-        });
+                return JResponse;
+            });
 }
 
 pplx::task<web::json::value> Orion::GetChatHistoryAsync()
@@ -589,6 +562,126 @@ pplx::task<web::json::value> Orion::GetChatHistoryAsync()
             else
             {
                 std::cerr << "Failed to get the chat history" << std::endl;
+                std::cout << response.to_string() << std::endl;
+
+                return pplx::task_from_result(web::json::value::object());
+            }
+        });
+}
+
+pplx::task<web::json::value> Orion::SpeakSingleAsync(const std::string& message, const ETTSAudioFormat eaudioFormat)
+{
+    // Create a new http_request to get the speech
+    web::http::http_request request(web::http::methods::POST);
+    request.set_request_uri(U("audio/speech"));
+    request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+    request.headers().add("Content-Type", "application/json");
+
+    // Add the body to the request
+    web::json::value body = web::json::value::object();
+    body["model"]         = web::json::value::string("tts-1");
+    body["input"]         = web::json::value::string(message);
+
+    // Default to mp3
+    body["response_format"] = web::json::value::string("mp3");
+    std::string MimeType    = "audio/mpeg";
+
+    if (eaudioFormat == ETTSAudioFormat::Opus)
+    {
+        MimeType                = "audio/ogg";
+        body["response_format"] = web::json::value::string("opus");
+    }
+    else if (eaudioFormat == ETTSAudioFormat::AAC)
+    {
+        MimeType                = "audio/aac";
+        body["response_format"] = web::json::value::string("aac");
+    }
+    else if (eaudioFormat == ETTSAudioFormat::Flac)
+    {
+        MimeType                = "audio/flac";
+        body["response_format"] = web::json::value::string("flac");
+    }
+    else if (eaudioFormat == ETTSAudioFormat::Wav)
+    {
+        MimeType                = "audio/wav";
+        body["response_format"] = web::json::value::string("wav");
+    }
+    else if (eaudioFormat == ETTSAudioFormat::PCM)
+    {
+        MimeType                = "audio/wav";
+        body["response_format"] = web::json::value::string("pcm");
+    }
+
+    // Set the voice based on the current voice
+    if (m_CurrentVoice == EOrionVoice::Alloy)
+    {
+        body["voice"] = web::json::value::string("alloy");
+    }
+    else if (m_CurrentVoice == EOrionVoice::Echo)
+    {
+        body["voice"] = web::json::value::string("echo");
+    }
+    else if (m_CurrentVoice == EOrionVoice::Fable)
+    {
+        body["voice"] = web::json::value::string("fable");
+    }
+    else if (m_CurrentVoice == EOrionVoice::Nova)
+    {
+        body["voice"] = web::json::value::string("nova");
+    }
+    else if (m_CurrentVoice == EOrionVoice::Onyx)
+    {
+        body["voice"] = web::json::value::string("onyx");
+    }
+    else if (m_CurrentVoice == EOrionVoice::Shimmer)
+    {
+        body["voice"] = web::json::value::string("shimmer");
+    }
+
+    const auto Extension = "." + body["response_format"].as_string();
+
+    request.set_body(body);
+
+    // Generate a unique filename for the speech
+    std::string FileName = "audio/speech_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) + Extension;
+
+    // Create the audio directory if it doesn't exist
+    std::error_code ec;
+    std::filesystem::create_directory("audio", ec);
+    if (ec)
+    {
+        std::cerr << "Failed to create the audio directory" << std::endl;
+        return pplx::task_from_result(web::json::value::object());
+    }
+
+    // Send the request and get the response
+    return m_OpenAIClient->request(request).then(
+        [FileName, MimeType](web::http::http_response response)
+        {
+            if (response.status_code() == web::http::status_codes::OK)
+            {
+                // Stream the response to a file using concurrency::streams::fstream to avoid loading the entire response into memory
+                // Then return the filename once the file has started streaming
+
+                // Create a file stream
+                return concurrency::streams::fstream::open_ostream(FileName).then(
+                    [response, FileName, MimeType](concurrency::streams::ostream fileStream)
+                    {
+                        // Stream the response to the file
+                        response.body().read_to_end(fileStream.streambuf()).wait();
+
+                        // TODO: Don't wait for the file to finish generating before returning the filename
+
+                        // Remove the audio/ prefix
+                        const auto FileNameNoPrefix = FileName.substr(6);
+
+                        return pplx::task_from_result(
+                            web::json::value::parse(R"({"file": ")" + FileNameNoPrefix + R"(", "type": ")" + MimeType + R"("})"));
+                    });
+            }
+            else
+            {
+                std::cerr << "Failed to get the speech" << std::endl;
                 std::cout << response.to_string() << std::endl;
 
                 return pplx::task_from_result(web::json::value::object());

@@ -46,6 +46,7 @@ void OrionWebServer::Wait()
     // Wait for the condition variable
     m_ConditionVariable.wait(Lock, [this] { return !m_bRunning; });
 
+    // Close the listener
     m_Listener.close().wait();
 }
 
@@ -75,13 +76,14 @@ void OrionWebServer::HandleRequest(web::http::http_request request)
     {
         HandleSpeakEndpoint(request);
     }
-    else if (Path == U("/play_audio"))
-    {
-        HandlePlayAudioEndpoint(request);
-    }
     else if (Path == U("/create_orion"))
     {
         HandleCreateOrionEndpoint(request);
+    }
+    // Check if /audio is in the request path
+    else if (Path.find(U("/audio")) != std::string::npos)
+    {
+        HandleAudioFileEndpoint(request);
     }
     else
     {
@@ -205,38 +207,93 @@ void OrionWebServer::HandleStaticFileEndpoint(web::http::http_request request)
         ContentType = U("audio/wav");
     else if (Extension == U(".ogg"))
         ContentType = U("audio/ogg");
+    else if (Extension == U(".opus"))
+        ContentType = U("audio/ogg");
+    else if (Extension == U(".flac"))
+        ContentType = U("audio/flac");
+    else if (Extension == U(".aac"))
+        ContentType = U("audio/aac");
     else
         ContentType = U("application/octet-stream"); // Default to binary stream for unknown file types
 
     // Prepend the static directory to the file name
     FileName = "static/" + FileName;
 
-    if (ContentType == "application/octet-stream")
-    {
-        // Stream the file to the response
-        concurrency::streams::fstream::open_istream(FileName).then(
-            [request](concurrency::streams::istream is)
+    // Stream the file to the response
+    concurrency::streams::fstream::open_istream(FileName)
+        .then(
+            [request, ContentType](concurrency::streams::istream is)
             {
                 // Send the response
-                request.reply(web::http::status_codes::OK, is);
+                request.reply(web::http::status_codes::OK, is, ContentType);
+            })
+        .then(
+            [FileName, request](pplx::task<void> t)
+            {
+                try
+                {
+                    t.get();
+                }
+                catch (std::exception& e)
+                {
+                    std::cerr << e.what() << std::endl;
+                    std::cout << e.what() << std::endl;
+
+                    request.reply(web::http::status_codes::NotFound, U("The file ") + FileName + U(" was not found."));
+                }
             });
-    }
-    else
+}
+
+void OrionWebServer::HandleAudioFileEndpoint(web::http::http_request request)
+{
+    // Get the file name from the request path
+    auto FileName = request.request_uri().path();
+
+    // Remove the leading slash
+    FileName = FileName.substr(1);
+
+    // Calculate the content type
+    auto ContentType = U("audio/mpeg");
+    if (FileName.find(U(".opus")) != std::string::npos)
     {
-        // Read the file into memory
-        std::ifstream File(FileName, std::ios::binary);
-        if (!File.is_open())
-        {
-            request.reply(web::http::status_codes::NotFound, U("The file was not found."));
-            return;
-        }
-
-        // Read the contents of the file
-        std::string Contents((std::istreambuf_iterator<char>(File)), std::istreambuf_iterator<char>());
-
-        // Send the contents of the file
-        request.reply(web::http::status_codes::OK, Contents, ContentType);
+        ContentType = U("audio/ogg");
     }
+    else if (FileName.find(U(".flac")) != std::string::npos)
+    {
+        ContentType = U("audio/flac");
+    }
+    else if (FileName.find(U(".aac")) != std::string::npos)
+    {
+        ContentType = U("audio/aac");
+    }
+    else if (FileName.find(U(".wav")) != std::string::npos)
+    {
+        ContentType = U("audio/wav");
+    }
+
+    // Stream the file to the response
+    concurrency::streams::fstream::open_istream(FileName)
+        .then(
+            [request, ContentType](concurrency::streams::istream is)
+            {
+                // Send the response.  Make sure to specify the content type
+                request.reply(web::http::status_codes::OK, is, ContentType);
+            })
+        .then(
+            [FileName, request](pplx::task<void> t)
+            {
+                try
+                {
+                    t.get();
+                }
+                catch (std::exception& e)
+                {
+                    std::cerr << e.what() << std::endl;
+                    std::cout << e.what() << std::endl;
+
+                    request.reply(web::http::status_codes::NotFound, U("The file ") + FileName + U(" was not found."));
+                }
+            });
 }
 
 void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request request)
@@ -319,14 +376,67 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request request)
 
 void OrionWebServer::HandleSpeakEndpoint(web::http::http_request request)
 {
-    // Not implemented
-    request.reply(web::http::status_codes::NotImplemented, U("This endpoint is not implemented."));
-}
+    // Check for the X-Orion-Id header
+    if (!request.headers().has(U("X-Orion-Id")))
+    {
+        request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
+        return;
+    }
 
-void OrionWebServer::HandlePlayAudioEndpoint(web::http::http_request request)
-{
-    // Not implemented
-    request.reply(web::http::status_codes::NotImplemented, U("This endpoint is not implemented."));
+    // Get the Orion instance id from the header
+    auto OrionID = request.headers().find(U("X-Orion-Id"))->second;
+
+    // Find the Orion instance with the given id
+    auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
+                                [OrionID](const std::unique_ptr<Orion>& orion) { return orion->GetCurrentAssistantID() == OrionID; });
+
+    // Check if the Orion instance was found
+    if (OrionIt == m_OrionInstances.end())
+    {
+        request.reply(web::http::status_codes::BadRequest, U("The Orion instance with the given id was not found."));
+        return;
+    }
+
+    // Get the message from the request body
+    request.extract_string()
+        .then([this, OrionIt, request](pplx::task<std::string> task) { return task.get(); })
+        .then(
+            [this, OrionIt, request](std::string message)
+            {
+                // Get the audio format from the query parameter
+                ETTSAudioFormat eAudioFormat = ETTSAudioFormat::Mp3;
+                if (request.request_uri().query().find(U("format=opus")) != std::string::npos)
+                {
+                    eAudioFormat = ETTSAudioFormat::Opus;
+                }
+                else if (request.request_uri().query().find(U("format=flac")) != std::string::npos)
+                {
+                    eAudioFormat = ETTSAudioFormat::Flac;
+                }
+                else if (request.request_uri().query().find(U("format=aac")) != std::string::npos)
+                {
+                    eAudioFormat = ETTSAudioFormat::AAC;
+                }
+                else if (request.request_uri().query().find(U("format=pcm")) != std::string::npos)
+                {
+                    eAudioFormat = ETTSAudioFormat::PCM;
+                }
+                else if (request.request_uri().query().find(U("format=wav")) != std::string::npos)
+                {
+                    eAudioFormat = ETTSAudioFormat::Wav;
+                }
+
+                // Make Orion speak the message
+                (*OrionIt)
+                    ->SpeakAsync(message, eAudioFormat)
+                    .then([this, request](pplx::task<web::json::value> task) { return task.get(); })
+                    .then(
+                        [request](web::json::value audioFiles)
+                        {
+                            // Send the response
+                            request.reply(web::http::status_codes::OK, audioFiles);
+                        });
+            });
 }
 
 void OrionWebServer::HandleCreateOrionEndpoint(web::http::http_request request)

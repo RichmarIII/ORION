@@ -10,6 +10,43 @@ document.getElementById('send-button').addEventListener('click', function()
     }
 });
 
+async function playAudioFilesSequentially(files, index = 0)
+{
+    if (index < files.length) {
+        const fileName = files[index].file;
+
+        // Create an audio element and set its source to the audio file
+        let audio = new Audio(`/audio/${fileName}`);
+        audio.preload = 'none';
+        
+        // Play the audio file
+        await audio.play();
+
+        return new Promise(resolve => {
+            // Once the audio ends, play the next one
+            audio.onended = () => {
+                resolve(playAudioFilesSequentially(files, index + 1));
+            };
+        });
+    }
+}
+
+// Add event listener to text input to send message on pressing enter
+document.getElementById('message-input').addEventListener('keypress', function(e)
+{
+    if (e.key === 'Enter')
+    {
+        var messageInput = document.getElementById('message-input').value;
+        var fileInput = document.getElementById('file-input').files;
+        if(messageInput.trim() !== '' || fileInput.length > 0)
+        {
+            addMessageToChat(messageInput, fileInput);
+            document.getElementById('message-input').value = '';
+            document.getElementById('file-input').value = '';
+        }
+    }
+});
+
 document.getElementById('new-chat-button').addEventListener('click', function()
 {
     // Implement the logic to handle new chat creation here
@@ -121,6 +158,7 @@ async function addMessageToChat(message, files)
 {
     if (message.trim() !== '')
     {
+        let filesToPlay = [];
         var chatArea = document.getElementById('chat-area');
 
         //Fetch markdown from the server
@@ -165,6 +203,29 @@ async function addMessageToChat(message, files)
 
             // Scroll to the bottom of the chat area
             chatArea.scrollTop = chatArea.scrollHeight;
+
+            // Now lets speak the message
+            fetch('/speak?format=opus', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain',
+                    'Accept': 'application/json',
+                    'X-Orion-Id': localStorage.getItem('orion_id')
+                },
+                body: message
+            }).then(response => response.json()).then(data =>
+            {
+                let files = data.files; // Array of audio files to play
+
+                if (files.length > 0) {
+                    playAudioFilesSequentially(files);
+                }
+                
+            }).catch(error => {
+                console.error('Error:', error);
+                alert('Failed to speak message: ' + error);
+            });
+
         }).catch(error => {
             console.error('Error:', error);
             alert('Failed to send message: ' + error);

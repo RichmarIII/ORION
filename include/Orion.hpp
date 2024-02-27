@@ -14,6 +14,34 @@
 
 namespace ORION
 {
+    /// @brief The type of audio format that TTS supports
+    enum class ETTSAudioFormat : uint8_t
+    {
+        /// @brief The MP3 audio format. For digital audio compression, preferred by most audio players. file extension: .mp3
+        Mp3,
+
+        /// @brief The PCM audio format. Similar to WAV but containing the raw samples in 24kHz (16-bit signed, low-endian), without the header.
+        /// file extension: .pcm
+        PCM,
+
+        /// @brief The Opus audio format. For internet streaming and communication, low latency.
+        /// file extension: .opus
+        Opus,
+
+        /// @brief The FLAC audio format. For lossless audio compression. favored by audio enthusiasts for archiving. file extension: .flac
+        Flac,
+
+        /// @brief The AAC audio format. For digital audio compression, preferred by YouTube, Android, iOS. file extension: .aac
+        AAC,
+
+        /// @brief The WAV audio format. Uncompressed WAV audio, suitable for low-latency applications to avoid decoding overhead. file extension:
+        /// .wav
+        Wav,
+
+        /// @brief The default audio format
+        Default = Mp3
+    };
+
     /// @brief The type of voice that ORION supports
     enum class EOrionVoice : uint8_t
     {
@@ -134,9 +162,13 @@ namespace ORION
         /// @return The response from the server
         pplx::task<std::string> SendMessageAsync(const std::string& message);
 
-        /// @brief  Speak a message asynchronously
+        /// @brief  Speak a message asynchronously. This function will segment the message into multiple parts if it is too long and call the
+        /// SpeakSingleAsync function to speak each part.
         /// @param  message The message to speak
-        pplx::task<void> SpeakAsync(const std::string& message);
+        /// @param  eaudioFormat The audio format to use
+        /// @return An array of audio files that can be played using the PlayAudio() function { "files": [{ "file": "audio1.mp3" }, {
+        /// "file":"audio2.mp3" }]}
+        pplx::task<web::json::value> SpeakAsync(const std::string& message, const ETTSAudioFormat eaudioFormat = ETTSAudioFormat::Default);
 
         /// @brief  Set New Voice
         /// @param  voice The voice to change to
@@ -187,6 +219,13 @@ namespace ORION
 
         /// @brief  Create a new OpenAI Thread, replacing the current one
         void CreateThread();
+
+        /// @brief  Speak a single message asynchronously. This function is called by the SpeakAsync function to speak a single message.
+        /// The SpeakAsync function will call this function multiple times if the message is too long.
+        /// @param  message The message to speak
+        /// @param  eaudioFormat The audio format to use
+        /// @return The audio file that can be played using the PlayAudio() function { "file": "audio1.mp3" }
+        pplx::task<web::json::value> SpeakSingleAsync(const std::string& message, const ETTSAudioFormat eaudioFormat = ETTSAudioFormat::Default);
 
     private:
         std::string                              m_Name;

@@ -54,6 +54,13 @@ namespace ORION
         /// @example Response: The contents of the image.png file served from the static directory
         void HandleStaticFileEndpoint(web::http::http_request request);
 
+        /// @brief  The /audio/<file> endpoint is used to serve audio files.
+        ///         This is a catch-all endpoint that will serve any file in the audio directory.
+        /// @param  request The HTTP request
+        /// @example curl -X GET http://localhost:8080/audio/audio1.mp3
+        /// @example Response: The contents of the audio1.mp3 file served from the audio directory
+        void HandleAudioFileEndpoint(web::http::http_request request);
+
         /// @brief  The /markdown endpoint is used to convert a message to markdown
         /// @param  request The HTTP request
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/markdown
@@ -75,19 +82,13 @@ namespace ORION
         /// that can be played using the play_audio endpoint.
         /// @param  request The HTTP request
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak
-        /// @example Response: [{ "file": "audio1.mp3" }, { "file": "audio2.mp3" }]
+        /// @example Response: { "files": [{ file: "audio1.mp3", type: "audio/mpeg" }, { file: "audio2.mp3", type: "audio/mpeg" }] }
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak?format=opus
-        /// @example Response: [{ "file": "audio1.opus" }, { "file": "audio2.opus" }]
+        /// @example Response: { "files": [{ file: "audio1.opus", type: "audio/ogg" }, { file: "audio2.opus", type: "audio/ogg" }]
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak?format=wav
-        /// @example Response: [{ "file": "audio1.wav" }, { "file": "audio2.wav" }]
+        /// @example Response: { "files": [{ file: "audio1.wav", type: "audio/wav" }, { file: "audio2.wav", type: "audio/wav" }]
         /// @note   The audio files are stored in the audio directory
         void HandleSpeakEndpoint(web::http::http_request request);
-
-        /// @brief  The /play_audio endpoint is used to play an audio file
-        /// @param  request The HTTP request
-        /// @example curl -X GET http://localhost:8080/play_audio?file=audio1.mp3
-        /// @example Response: The contents of the audio1.mp3 file served from the audio directory
-        void HandlePlayAudioEndpoint(web::http::http_request request);
 
         /// @brief  The /create_orion endpoint is used to create an Orion instance.
         /// The Orion instance is returned as a JSON object with an id property. This id must be used in the X-Orion-Id header for all requests.
