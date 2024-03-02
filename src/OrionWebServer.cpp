@@ -8,6 +8,8 @@
 #include "tools/SearchFilesystemFunctionTool.hpp"
 #include "tools/TakeScreenshotFunctionTool.hpp"
 #include "tools/WebSearchFunctionTool.hpp"
+#include "tools/ListSmartDevicesFunctionTool.hpp"
+#include "tools/ExecSmartDeviceServiceFunctionTool.hpp"
 
 #include <cmark.h>
 
@@ -467,6 +469,8 @@ void OrionWebServer::HandleCreateOrionEndpoint(web::http::http_request request)
     Tools.push_back(std::make_unique<ChangeIntelligenceFunctionTool>());
     Tools.push_back(std::make_unique<RetrievalTool>());
     Tools.push_back(std::make_unique<CodeInterpreterTool>());
+    Tools.push_back(std::make_unique<ListSmartDevicesFunctionTool>());
+    Tools.push_back(std::make_unique<ExecSmartDeviceServiceFunctionTool>());
 
     // Create the Orion instance
     auto NewOrion = std::make_unique<Orion>(OrionID, std::move(Tools));

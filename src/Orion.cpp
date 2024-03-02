@@ -436,6 +436,25 @@ void Orion::CreateClient()
             return;
         }
     }
+
+    // Load the Home Assistant API key from the environment or a file
+    {
+        if (auto Key = std::getenv("HASS_API_KEY"); Key)
+        {
+            m_HASSAPIKey = Key;
+        }
+        else
+        {
+            // Load the Home Assistant API key from a file
+            std::ifstream APIKey {".hass_api_key.txt"};
+            m_HASSAPIKey = std::string {std::istreambuf_iterator<char>(APIKey), std::istreambuf_iterator<char>()};
+        }
+        if (m_HASSAPIKey.empty())
+        {
+            std::cerr << "Home Assistant API key not found" << std::endl;
+            return;
+        }
+    }
 }
 
 void Orion::SetNewVoice(const EOrionVoice voice)
@@ -499,6 +518,112 @@ pplx::task<web::json::value> Orion::SpeakAsync(const std::string& message, const
 
                 return JResponse;
             });
+}
+
+web::json::value Orion::ListSmartDevices(const std::string& domain)
+{
+    try
+    {
+        // Create a new http_client to communicate with the home-assistant api
+        web::http::client::http_client client(U("http://homeassistant.local:8123/api/"));
+
+        // Create a new http_request to get the smart devices
+        web::http::http_request request(web::http::methods::GET);
+        request.set_request_uri(U("states"));
+        request.headers().add("Authorization", "Bearer " + m_HASSAPIKey);
+        request.headers().add("Content-Type", "application/json");
+
+        const auto DomainWithDot = domain + ".";
+
+        // Send the request and get the response
+        return client.request(request)
+            .then(
+                [DomainWithDot](web::http::http_response response)
+                {
+                    if (response.status_code() == web::http::status_codes::OK)
+                    {
+                        return response.extract_json().then(
+                            [DomainWithDot](pplx::task<web::json::value> task)
+                            {
+                                return task.then(
+                                    [DomainWithDot](web::json::value json)
+                                    {
+                                        web::json::value JSmartDevices = web::json::value::array();
+                                        for (const auto& device : json.as_array())
+                                        {
+                                            const auto DeviceName = device.at("entity_id").as_string();
+                                            if (DomainWithDot == "all." || DeviceName.find(DomainWithDot) != std::string::npos)
+                                            {
+                                                JSmartDevices[JSmartDevices.size()] = web::json::value::string(DeviceName);
+                                            }
+                                        }
+
+                                        return JSmartDevices;
+                                    });
+                            });
+                    }
+                    else
+                    {
+                        std::cerr << "Failed to get the smart devices: " << response.to_string() << std::endl;
+                        std::cout << "Failed to get the smart devices: " << response.to_string() << std::endl;
+                        return pplx::task_from_result(web::json::value::array());
+                    }
+                })
+            .get();
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Failed to list the smart devices: " << e.what() << std::endl;
+        return web::json::value::array();
+    }
+}
+
+web::json::value Orion::ExecSmartDeviceService(const web::json::value& devices, const std::string& service)
+{
+    try
+    {
+        // Loop through the devices and execute the service.  The domain is the first part of the entity_id (e.g. light.bedroom_light -> light)
+        for (const auto& device : devices.as_array())
+        {
+            const auto DeviceName = device.as_string();
+            const auto Domain     = DeviceName.substr(0, DeviceName.find('.'));
+            const auto EntityID   = DeviceName.substr(DeviceName.find('.') + 1);
+
+            // Create a new http_client to communicate with the home-assistant api
+            web::http::client::http_client client(U("http://homeassistant.local:8123/api/"));
+
+            // Create a new http_request to execute the smart device service
+            web::http::http_request request(web::http::methods::POST);
+            request.set_request_uri(U("services/" + Domain + "/" + service));
+            request.headers().add("Authorization", "Bearer " + m_HASSAPIKey);
+            request.headers().add("Content-Type", "application/json");
+
+            // Add the body to the request
+            web::json::value body = web::json::value::object();
+            body["entity_id"]     = web::json::value::string(DeviceName);
+            request.set_body(body);
+
+            // Send the request and get the response
+            auto response = client.request(request).get();
+
+            if (response.status_code() != web::http::status_codes::OK)
+            {
+                std::cerr << "Failed to execute the smart device service" << std::endl;
+                std::cout << response.to_string() << std::endl;
+            }
+            else
+            {
+                std::cout << "Executed the smart device service: " << service << " on the device: " << DeviceName << std::endl;
+            }
+        }
+
+        return web::json::value::string("Executed the smart device service: " + service);
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Failed to execute the smart device service: " << e.what() << std::endl;
+        return web::json::value::string("Failed to execute the smart device service: " + std::string(e.what()));
+    }
 }
 
 pplx::task<web::json::value> Orion::GetChatHistoryAsync()

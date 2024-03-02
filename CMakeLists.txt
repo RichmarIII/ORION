@@ -22,6 +22,8 @@ set(SOURCES
     src/tools/WebSearchFunctionTool.cpp
     src/tools/ChangeVoiceFunctionTool.cpp
     src/tools/ChangeIntelligenceFunctionTool.cpp
+    src/tools/ListSmartDevicesFunctionTool.cpp
+    src/tools/ExecSmartDeviceServiceFunctionTool.cpp
     # Add all source files here
 )
 
@@ -44,6 +46,10 @@ add_custom_command(TARGET ORION POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
     ${CMAKE_SOURCE_DIR}/.openweather_api_key.txt
     $<TARGET_FILE_DIR:ORION>/.openweather_api_key.txt
+
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_SOURCE_DIR}/.hass_api_key.txt
+    $<TARGET_FILE_DIR:ORION>/.hass_api_key.txt
 
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_SOURCE_DIR}/templates

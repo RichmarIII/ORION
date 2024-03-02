@@ -94,6 +94,7 @@ document.addEventListener('DOMContentLoaded', function()
             }
         }).then(response => response.json()).then(data => {
             console.log('Orion details:', data);
+            localStorage.setItem('orion_id', data.id);
         }).catch(error => {
             console.error('Error:', error);
             alert('Failed to get Orion details: ' + error);

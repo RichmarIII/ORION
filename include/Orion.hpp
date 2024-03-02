@@ -170,6 +170,17 @@ namespace ORION
         /// "file":"audio2.mp3" }]}
         pplx::task<web::json::value> SpeakAsync(const std::string& message, const ETTSAudioFormat eaudioFormat = ETTSAudioFormat::Default);
 
+        /// @brief  List the smart devices
+        /// @param  domain The domain to list the smart devices for
+        /// @return The list of smart devices in the domain
+        web::json::value ListSmartDevices(const std::string& domain);
+
+        /// @brief  Execute a smart device service
+        /// @param  devices The devices to execute the service on
+        /// @param  service The service to execute
+        /// @return The result of the service execution
+        web::json::value ExecSmartDeviceService(const web::json::value& devices, const std::string& service);
+
         /// @brief  Set New Voice
         /// @param  voice The voice to change to
         void SetNewVoice(const EOrionVoice voice);
@@ -234,6 +245,7 @@ namespace ORION
         std::vector<std::unique_ptr<IOrionTool>> m_Tools;
         std::string                              m_OpenAIAPIKey;
         std::string                              m_OpenWeatherAPIKey;
+        std::string                              m_HASSAPIKey;
         std::string                              m_CurrentAssistantID;
         std::string                              m_CurrentThreadID;
         EOrionVoice                              m_CurrentVoice;
