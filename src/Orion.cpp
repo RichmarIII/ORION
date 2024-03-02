@@ -469,25 +469,29 @@ void Orion::SetNewIntelligence(const EOrionIntelligence intelligence)
 
 pplx::task<web::json::value> Orion::SpeakAsync(const std::string& message, const ETTSAudioFormat eaudioFormat)
 {
-    // Split the message into multiple messages if it's too long (2048). But only on spaces
+    // Split the message into multiple messages if it's too long (512). But only on spaces or newlines
     std::vector<std::string> Messages;
-    if (message.size() > 2048)
+    const auto               NewLineChar = '\n';
+    const auto               SpaceChar   = ' ';
+    constexpr uint16_t       MaxLength   = 512;
+    if (message.length() > MaxLength)
     {
         size_t Start = 0;
         size_t End   = 0;
-        while (End < message.size())
+        for (size_t i = 0; i < message.length(); ++i)
         {
-            End = Start + 2048;
-            if (End < message.size())
+            if (message[i] == SpaceChar || message[i] == NewLineChar)
             {
-                while (message[End] != ' ')
-                {
-                    End--;
-                }
+                End = i;
             }
-            Messages.push_back(message.substr(Start, End - Start));
-            Start = End;
+
+            if (i - Start > MaxLength)
+            {
+                Messages.push_back(message.substr(Start, End - Start));
+                Start = End;
+            }
         }
+        Messages.push_back(message.substr(Start));
     }
     else
     {
