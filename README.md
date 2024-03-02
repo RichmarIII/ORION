@@ -47,10 +47,10 @@ Before installing ORION, ensure you have the following:
 
 - **C++ Compiler (GCC, MSVC, or CLANG)**: Essential for compiling the project. Choose based on your platform for best compatibility.
 - **CMake (version 3.8 or higher)**: Automates the build process, ensuring a smooth setup across different environments. [Download CMake](https://cmake.org/download/)
-- **cpprestsdk**: Facilitates web and HTTP functionalities. Install via vcpkg for ease. [cpprestsdk on GitHub](https://github.com/microsoft/cpprestsdk)
-- **vcpkg**: Manages C++ library dependencies, simplifying cpprestsdk installation. [vcpkg on GitHub](https://github.com/microsoft/vcpkg)
+- **vcpkg**: Manages C++ library dependencies. [vcpkg on GitHub](https://github.com/microsoft/vcpkg)
 - **OpenAI API key**: Powers AI functionalities. Obtain from [OpenAI](https://openai.com/).
 - **OpenWeatherMap API key**: Enables weather-related features. Sign up at [OpenWeatherMap](https://openweathermap.org/api).
+- **Home-Assistant API key:** Enabled smart home related features. Obtain from [Home-Assistant](https://developers.home-assistant.io/docs/api/rest/ "How to obtain API Key")
 
 ### Installation Steps
 
@@ -64,7 +64,7 @@ Before installing ORION, ensure you have the following:
    ```
 3. Install dependencies via vcpkg:
    ```bash
-   ./vcpkg install cpprestsdk
+   [path-to-vcpkg]/vcpkg install cpprestsdk
    ```
 4. Build ORION:
    ```
@@ -75,7 +75,11 @@ Before installing ORION, ensure you have the following:
 
 ## Running ORION
 
-Configure your OpenAI and OpenWeatherMap API keys before launching ORION. Set them as environment variables or place them in `.openai_api_key.txt` and `.openweather_api_key.txt` within the project directory.
+Configure your various API keys before launching ORION. Set them as environment variables or place them in files within the project directory.
+
+* `.openai_api_key.txt (OPENAI_API_KEY)`
+* `.openweather_api_key.txt (OPENWEATHER_API_KEY)`
+* `.hass_api_key.txt (HASS_API_KEY)`
 
 To start ORION, execute:
 
@@ -83,13 +87,13 @@ To start ORION, execute:
 ./ORION
 ```
 
-Access its web interface at `http://localhost:8080` to interact with the AI assistant.
+Access its web interface at `http://localhost:5000` to interact with the AI assistant.
 
 > **Important Note:** The use of OpenAI's APIs incurs costs. Monitor your usage to manage expenses effectively.
 
 ## Usage Notes
 
-- **Cost Awareness:** ORION uses the OpenAI APIs, which incurs costs based on usage. Users are advised to monitor their use closely to manage potential expenses.
+- **Cost Awareness:** ORION uses OpenAI APIs, which incurs costs based on usage. Users are advised to monitor their use closely to manage potential expenses.
 - **Model Flexibility:** Users can request ORION to switch between different OpenAI models to find a balance between cost and performance.
 
 ## License
