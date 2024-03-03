@@ -1,5 +1,6 @@
 .openai_api_key.txt
 .openweather_api_key.txt
+.hass_api_key.txt
 .venv/
 .vscode/
 .history/
