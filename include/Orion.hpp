@@ -166,9 +166,8 @@ namespace ORION
         /// SpeakSingleAsync function to speak each part.
         /// @param  message The message to speak
         /// @param  eaudioFormat The audio format to use
-        /// @return An array of audio files that can be played using the PlayAudio() function { "files": [{ "file": "audio1.mp3" }, {
-        /// "file":"audio2.mp3" }]}
-        pplx::task<web::json::value> SpeakAsync(const std::string& message, const ETTSAudioFormat eaudioFormat = ETTSAudioFormat::Default);
+        /// @return Nothing. The audio file will be saved to the disk with the format "audio/{assistant_id}/speech_{index}.{ext}"
+        pplx::task<void> SpeakAsync(const std::string& message, const ETTSAudioFormat eaudioFormat = ETTSAudioFormat::Default);
 
         /// @brief  List the smart devices
         /// @param  domain The domain to list the smart devices for
@@ -234,9 +233,16 @@ namespace ORION
         /// @brief  Speak a single message asynchronously. This function is called by the SpeakAsync function to speak a single message.
         /// The SpeakAsync function will call this function multiple times if the message is too long.
         /// @param  message The message to speak
+        /// @param  index The index of the message
         /// @param  eaudioFormat The audio format to use
-        /// @return The audio file that can be played using the PlayAudio() function { "file": "audio1.mp3" }
-        pplx::task<web::json::value> SpeakSingleAsync(const std::string& message, const ETTSAudioFormat eaudioFormat = ETTSAudioFormat::Default);
+        /// @return Nothing. The audio file will be saved to the disk with the format "audio/{assistant_id}/speech_{index}.{ext}"
+        pplx::task<void> SpeakSingleAsync(const std::string& message, const uint8_t index, const ETTSAudioFormat eaudioFormat = ETTSAudioFormat::Default);
+
+        /// @brief  Split the message into multiple parts if it is too long asynchronously. This is a helper function that is called by the SpeakAsync
+        /// function.
+        /// @param  message The message to split
+        /// @return The message split into multiple parts
+        pplx::task<std::vector<std::string>> SplitMessageAsync(const std::string& message);
 
     private:
         std::string                              m_Name;

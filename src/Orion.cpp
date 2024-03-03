@@ -467,61 +467,51 @@ void Orion::SetNewIntelligence(const EOrionIntelligence intelligence)
     m_CurrentIntelligence = intelligence;
 }
 
-pplx::task<web::json::value> Orion::SpeakAsync(const std::string& message, const ETTSAudioFormat eaudioFormat)
+pplx::task<void> Orion::SpeakAsync(const std::string& message, const ETTSAudioFormat eaudioFormat)
 {
-    // Split the message into multiple messages if it's too long (512). But only on spaces or newlines
-    std::vector<std::string> Messages;
-    const auto               NewLineChar = '\n';
-    const auto               SpaceChar   = ' ';
-    constexpr uint16_t       MaxLength   = 512;
-    if (message.length() > MaxLength)
-    {
-        size_t Start = 0;
-        size_t End   = 0;
-        for (size_t i = 0; i < message.length(); ++i)
+    // Split the message into multiple messages if it's too long
+    return SplitMessageAsync(message).then(
+        [this, eaudioFormat](pplx::task<std::vector<std::string>> task)
         {
-            if (message[i] == SpaceChar || message[i] == NewLineChar)
-            {
-                End = i;
-            }
+            const auto SplitMessages = task.get();
 
-            if (i - Start > MaxLength)
+            // Each orion instance has it's own folder for audio files to avoid conflicts. Append the assistant id to the audio folder.
+            // Create the audio directory if it doesn't exist
+            std::error_code ec;
+            if (!std::filesystem::exists("audio/" + m_CurrentAssistantID, ec))
             {
-                Messages.push_back(message.substr(Start, End - Start));
-                Start = End;
-            }
-        }
-        Messages.push_back(message.substr(Start));
-    }
-    else
-    {
-        Messages.push_back(message);
-    }
-
-    // Create a task for each message
-    std::vector<pplx::task<web::json::value>> Tasks;
-    for (const auto& Message : Messages)
-    {
-        Tasks.push_back(SpeakSingleAsync(Message, eaudioFormat));
-    }
-
-    // When all the tasks are complete, return the results
-    return pplx::when_all(Tasks.begin(), Tasks.end())
-        .then(
-            [](std::vector<web::json::value> results)
-            {
-                // Format: { "files": [ { "file": "audio1.mp3", "type": "audio/mpeg" }, { "file": "audio2.opus", "type": "audio/ogg" } ] }
-                web::json::value JFiles = web::json::value::array();
-                for (const auto& result : results)
+                std::filesystem::create_directory("audio/" + m_CurrentAssistantID, ec);
+                if (ec)
                 {
-                    JFiles[JFiles.size()] = result;
+                    std::cerr << "Failed to create the audio directory" << std::endl;
+                    return;
                 }
+            }
 
-                web::json::value JResponse = web::json::value::object();
-                JResponse["files"]         = JFiles;
+            // Delete all the audio files in the directory
+            for (const auto& entry : std::filesystem::directory_iterator("audio/" + m_CurrentAssistantID))
+            {
+                std::filesystem::remove(entry.path(), ec);
+                if (ec)
+                {
+                    std::cerr << "Failed to delete the audio file" << std::endl;
+                    return;
+                }
+            }
 
-                return JResponse;
-            });
+            // Create a task for each message
+            std::vector<pplx::task<void>> Tasks;
+            uint8_t                       Index = 0;
+            for (const auto& Message : SplitMessages)
+            {
+                Tasks.push_back(SpeakSingleAsync(Message, Index, eaudioFormat));
+                Index++;
+            }
+
+            // Only wait for the first task to complete.  By the time the first task is done, the rest of the tasks should be done as well or
+            // enough generated audio should be available to play without buffering.
+            Tasks.begin()->wait();
+        });
 }
 
 web::json::value Orion::ListSmartDevices(const std::string& domain)
@@ -698,7 +688,7 @@ pplx::task<web::json::value> Orion::GetChatHistoryAsync()
         });
 }
 
-pplx::task<web::json::value> Orion::SpeakSingleAsync(const std::string& message, const ETTSAudioFormat eaudioFormat)
+pplx::task<void> Orion::SpeakSingleAsync(const std::string& message, const uint8_t index, const ETTSAudioFormat eaudioFormat)
 {
     // Create a new http_request to get the speech
     web::http::http_request request(web::http::methods::POST);
@@ -771,17 +761,8 @@ pplx::task<web::json::value> Orion::SpeakSingleAsync(const std::string& message,
 
     request.set_body(body);
 
-    // Generate a unique filename for the speech
-    std::string FileName = "audio/speech_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) + Extension;
-
-    // Create the audio directory if it doesn't exist
-    std::error_code ec;
-    std::filesystem::create_directory("audio", ec);
-    if (ec)
-    {
-        std::cerr << "Failed to create the audio directory" << std::endl;
-        return pplx::task_from_result(web::json::value::object());
-    }
+    // Generate audio file name from index
+    std::string FileName = "audio/" + m_CurrentAssistantID + "/speech_" + std::to_string(index) + Extension;
 
     // Send the request and get the response
     return m_OpenAIClient->request(request).then(
@@ -799,21 +780,75 @@ pplx::task<web::json::value> Orion::SpeakSingleAsync(const std::string& message,
                         // Stream the response to the file
                         response.body().read_to_end(fileStream.streambuf()).wait();
 
-                        // TODO: Don't wait for the file to finish generating before returning the filename
-
-                        // Remove the audio/ prefix
-                        const auto FileNameNoPrefix = FileName.substr(6);
-
-                        return pplx::task_from_result(
-                            web::json::value::parse(R"({"file": ")" + FileNameNoPrefix + R"(", "type": ")" + MimeType + R"("})"));
+                        return pplx::task_from_result();
                     });
             }
             else
             {
                 std::cerr << "Failed to get the speech" << std::endl;
                 std::cout << response.to_string() << std::endl;
-
-                return pplx::task_from_result(web::json::value::object());
             }
+
+            return pplx::task_from_result();
+        });
+}
+
+pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string& message)
+{
+    // Split the message into multiple messages if it's too long (512). But only on periods or newlines.
+    // This is to avoid splitting words in half. A message can be longer than 512 characters if it contains no periods or newlines.
+    // It must NOT be plit mid-word or mid-sentence.
+
+    return pplx::create_task(
+        [message]
+        {
+            std::vector<std::string> Messages;
+            constexpr char           NewLineChar        = '\n';
+            constexpr char           PeriodChar         = '.';
+            constexpr size_t         MaxLengthSoftLimit = 256;
+            constexpr size_t         MaxLengthHardLimit = 4096;
+            constexpr size_t         DistanceThreshold  = 25;
+
+            size_t MessageStart   = 0;                 // Start index of the current message
+            size_t LastSplitIndex = std::string::npos; // Initialize to indicate no split index found yet
+            size_t Index          = 0;                 // Current index in the message
+
+            while (Index < message.length())
+            {
+                bool bReachedHardLimit = false;
+
+                // Look for next split point or end of message
+                while (Index < message.length() && !bReachedHardLimit)
+                {
+                    if (message[Index] == PeriodChar || message[Index] == NewLineChar)
+                    {
+                        LastSplitIndex = Index;
+                    }
+                    ++Index;
+
+                    // Check conditions for splitting
+                    if ((Index - MessageStart >= MaxLengthSoftLimit &&
+                         (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DistanceThreshold)) ||
+                        Index - MessageStart >= MaxLengthHardLimit)
+                    {
+                        bReachedHardLimit = true; // Force split if hard limit reached
+                        // Adjust SplitIndex to last known good split if within threshold, otherwise split at current index
+                        size_t SplitIndex =
+                            (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DistanceThreshold) ? LastSplitIndex : Index - 1;
+                        Messages.push_back(message.substr(MessageStart, SplitIndex - MessageStart + 1));
+                        MessageStart   = SplitIndex + 1;
+                        Index          = MessageStart;
+                        LastSplitIndex = std::string::npos; // Reset last split index
+                    }
+                }
+            }
+
+            // Handle any remaining part of the message
+            if (MessageStart < message.length())
+            {
+                Messages.push_back(message.substr(MessageStart));
+            }
+
+            return Messages;
         });
 }

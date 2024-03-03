@@ -431,12 +431,11 @@ void OrionWebServer::HandleSpeakEndpoint(web::http::http_request request)
                 // Make Orion speak the message
                 (*OrionIt)
                     ->SpeakAsync(message, eAudioFormat)
-                    .then([this, request](pplx::task<web::json::value> task) { return task.get(); })
                     .then(
-                        [request](web::json::value audioFiles)
+                        [this, request]()
                         {
                             // Send the response
-                            request.reply(web::http::status_codes::OK, audioFiles);
+                            request.reply(web::http::status_codes::OK);
                         });
             });
 }

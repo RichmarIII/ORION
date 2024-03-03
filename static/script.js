@@ -10,25 +10,27 @@ document.getElementById('send-button').addEventListener('click', function()
     }
 });
 
-async function playAudioFilesSequentially(files, index = 0)
+async function playAudioFilesSequentially(index = 0)
 {
-    if (index < files.length) {
-        const fileName = files[index].file;
+        const timestamp = new Date().getTime();
+        const fileName = `speech_${index}.opus?${timestamp}`;
+        const orionID = localStorage.getItem('orion_id');
+        const fullPath = `/audio/${orionID}/${fileName}`;
+        console.log('Playing audio file:', fullPath);
 
         // Create an audio element and set its source to the audio file
-        let audio = new Audio(`/audio/${fileName}`);
+        let audio = new Audio(fullPath);
         audio.preload = 'none';
         
         // Play the audio file
-        await audio.play();
+        audio.play();
 
         return new Promise(resolve => {
             // Once the audio ends, play the next one
             audio.onended = () => {
-                resolve(playAudioFilesSequentially(files, index + 1));
+                resolve(playAudioFilesSequentially(index + 1));
             };
         });
-    }
 }
 
 // Add event listener to text input to send message on pressing enter
@@ -210,17 +212,12 @@ async function addMessageToChat(message, files)
                 method: 'POST',
                 headers: {
                     'Content-Type': 'text/plain',
-                    'Accept': 'application/json',
                     'X-Orion-Id': localStorage.getItem('orion_id')
                 },
                 body: message
-            }).then(response => response.json()).then(data =>
+            }).then(response =>
             {
-                let files = data.files; // Array of audio files to play
-
-                if (files.length > 0) {
-                    playAudioFilesSequentially(files);
-                }
+                playAudioFilesSequentially();
                 
             }).catch(error => {
                 console.error('Error:', error);
