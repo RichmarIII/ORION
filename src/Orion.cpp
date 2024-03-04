@@ -489,9 +489,9 @@ pplx::task<void> Orion::SpeakAsync(const std::string& message, const ETTSAudioFo
             }
 
             // Delete all the audio files in the directory
-            for (const auto& entry : std::filesystem::directory_iterator("audio/" + m_CurrentAssistantID))
+            for (const auto& Entry : std::filesystem::directory_iterator("audio/" + m_CurrentAssistantID))
             {
-                std::filesystem::remove(entry.path(), ec);
+                std::filesystem::remove(Entry.path(), ec);
                 if (ec)
                 {
                     std::cerr << "Failed to delete the audio file" << std::endl;

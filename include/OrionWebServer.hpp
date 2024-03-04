@@ -78,16 +78,12 @@ namespace ORION
 
         /// @brief  The /speak endpoint is used to make Orion speak a message.
         /// Supported audio formats: mp3, opus, aac, flac, wav, and pcm
-        /// Audio is segmented into multiple files if the message is too long. Return a json array of audio files
-        /// that can be played using the play_audio endpoint.
+        /// Audio is segmented into multiple files if the message is too long.
         /// @param  request The HTTP request
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak
-        /// @example Response: { "files": [{ file: "audio1.mp3", type: "audio/mpeg" }, { file: "audio2.mp3", type: "audio/mpeg" }] }
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak?format=opus
-        /// @example Response: { "files": [{ file: "audio1.opus", type: "audio/ogg" }, { file: "audio2.opus", type: "audio/ogg" }]
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak?format=wav
-        /// @example Response: { "files": [{ file: "audio1.wav", type: "audio/wav" }, { file: "audio2.wav", type: "audio/wav" }]
-        /// @note   The audio files are stored in the audio directory
+        /// @note   The audio files are stored in the audio/{orion_id} directory
         void HandleSpeakEndpoint(web::http::http_request request);
 
         /// @brief  The /create_orion endpoint is used to create an Orion instance.
