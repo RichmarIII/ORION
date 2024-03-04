@@ -17,10 +17,10 @@
 
 using namespace ORION;
 
-void OrionWebServer::Start(int port)
+void OrionWebServer::Start(int Port)
 {
     // Create a listener
-    m_Listener = web::http::experimental::listener::http_listener(U("http://localhost:") + std::to_string(port));
+    m_Listener = web::http::experimental::listener::http_listener(U("http://localhost:") + std::to_string(Port));
 
     // Handle requests
     m_Listener.support(web::http::methods::POST, std::bind(&OrionWebServer::HandleRequest, this, std::placeholders::_1));
@@ -30,13 +30,13 @@ void OrionWebServer::Start(int port)
     m_Listener.open().wait();
 
     // Set the running flag
-    m_bRunning = true;
+    m_IsRunning = true;
 }
 
 void OrionWebServer::Stop()
 {
     // Close the listener
-    m_bRunning = false;
+    m_IsRunning = false;
     m_ConditionVariable.notify_one();
 }
 
@@ -46,112 +46,112 @@ void OrionWebServer::Wait()
     std::unique_lock<std::mutex> Lock(m_Mutex);
 
     // Wait for the condition variable
-    m_ConditionVariable.wait(Lock, [this] { return !m_bRunning; });
+    m_ConditionVariable.wait(Lock, [this] { return !m_IsRunning; });
 
     // Close the listener
     m_Listener.close().wait();
 }
 
-void OrionWebServer::HandleRequest(web::http::http_request request)
+void OrionWebServer::HandleRequest(web::http::http_request Request)
 {
     // Get the request path
-    auto Path = request.request_uri().path();
+    auto Path = Request.request_uri().path();
 
     // Dispatch the request to the appropriate handler
     if (Path == U("/send_message"))
     {
-        HandleSendMessageEndpoint(request);
+        HandleSendMessageEndpoint(Request);
     }
     else if (Path == U("/"))
     {
-        HandleRootEndpoint(request);
+        HandleRootEndpoint(Request);
     }
     else if (Path == U("/markdown"))
     {
-        HandleMarkdownEndpoint(request);
+        HandleMarkdownEndpoint(Request);
     }
     else if (Path == U("/chat_history"))
     {
-        HandleChatHistoryEndpoint(request);
+        HandleChatHistoryEndpoint(Request);
     }
     else if (Path == U("/speak"))
     {
-        HandleSpeakEndpoint(request);
+        HandleSpeakEndpoint(Request);
     }
     else if (Path == U("/create_orion"))
     {
-        HandleCreateOrionEndpoint(request);
+        HandleCreateOrionEndpoint(Request);
     }
     // Check if /audio is in the request path
     else if (Path.find(U("/audio")) != std::string::npos)
     {
-        HandleAudioFileEndpoint(request);
+        HandleAudioFileEndpoint(Request);
     }
     else
     {
-        HandleStaticFileEndpoint(request);
+        HandleStaticFileEndpoint(Request);
     }
 }
 
-void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request request)
+void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
 {
     // Check for the X-Orion-Id header
-    if (!request.headers().has(U("X-Orion-Id")))
+    if (!Request.headers().has(U("X-Orion-Id")))
     {
-        request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
+        Request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
         return;
     }
 
     // Get the Orion instance id from the header
-    auto OrionID = request.headers().find(U("X-Orion-Id"))->second;
+    auto OrionID = Request.headers().find(U("X-Orion-Id"))->second;
 
     // Find the Orion instance with the given id
     auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
-                                [OrionID](const std::unique_ptr<Orion>& orion) { return orion->GetCurrentAssistantID() == OrionID; });
+                                [OrionID](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == OrionID; });
 
     // Check if the Orion instance was found
     if (OrionIt == m_OrionInstances.end())
     {
-        request.reply(web::http::status_codes::BadRequest, U("The Orion instance with the given id was not found."));
+        Request.reply(web::http::status_codes::BadRequest, U("The Orion instance with the given id was not found."));
         return;
     }
 
     // Check if markdown is requested
-    bool bMarkDown = request.request_uri().query().find(U("markdown=true")) != std::string::npos;
+    const bool IsMarkdownRequested = Request.request_uri().query().find(U("markdown=true")) != std::string::npos;
 
     // Get the message from the request body
-    request.extract_string()
-        .then([](pplx::task<std::string> task) { return task.get(); })
+    Request.extract_string()
+        .then([](pplx::task<std::string> ExtractJsonTask) { return ExtractJsonTask.get(); })
         .then(
-            [OrionIt, bMarkDown, request](std::string message)
+            [OrionIt, IsMarkdownRequested, Request](std::string RequestMessage)
             {
                 (*OrionIt)
-                    ->SendMessageAsync(message)
-                    .then([](pplx::task<std::string> task) { return task.get(); })
+                    ->SendMessageAsync(RequestMessage)
+                    .then([](pplx::task<std::string> SendMessageTask) { return SendMessageTask.get(); })
                     .then(
-                        [bMarkDown, request](std::string response)
+                        [IsMarkdownRequested, Request](std::string SendMessageResponse)
                         {
                             // Convert the message to markdown if requested
-                            if (bMarkDown)
+                            if (IsMarkdownRequested)
                             {
-                                auto szMarkdown = cmark_markdown_to_html(response.c_str(), response.length(), CMARK_OPT_UNSAFE);
-                                response        = szMarkdown;
-                                free(szMarkdown);
+                                auto pMarkdown = cmark_markdown_to_html(SendMessageResponse.c_str(), SendMessageResponse.length(), CMARK_OPT_UNSAFE);
+                                SendMessageResponse = pMarkdown;
+                                free(pMarkdown);
                             }
 
                             // Send the response
-                            request.reply(web::http::status_codes::OK, response);
+                            Request.reply(web::http::status_codes::OK, SendMessageResponse);
                         });
             });
 }
 
-void OrionWebServer::HandleRootEndpoint(web::http::http_request request)
+void OrionWebServer::HandleRootEndpoint(web::http::http_request Request)
 {
     // Find the index.html file
     std::ifstream IndexFile("templates/index.html");
     if (!IndexFile.is_open())
     {
-        request.reply(web::http::status_codes::NotFound, U("The index.html file was not found."));
+        Request.reply(web::http::status_codes::NotFound, U("The index.html file was not found."));
         return;
     }
 
@@ -159,13 +159,13 @@ void OrionWebServer::HandleRootEndpoint(web::http::http_request request)
     std::string IndexContents((std::istreambuf_iterator<char>(IndexFile)), std::istreambuf_iterator<char>());
 
     // Send the contents of the index.html file
-    request.reply(web::http::status_codes::OK, IndexContents, U("text/html"));
+    Request.reply(web::http::status_codes::OK, IndexContents, U("text/html"));
 }
 
-void OrionWebServer::HandleStaticFileEndpoint(web::http::http_request request)
+void OrionWebServer::HandleStaticFileEndpoint(web::http::http_request Request)
 {
     // Get the file name from the request path
-    auto FileName = request.request_uri().path();
+    auto FileName = Request.request_uri().path();
 
     // Remove the leading slash
     FileName = FileName.substr(1);
@@ -174,7 +174,7 @@ void OrionWebServer::HandleStaticFileEndpoint(web::http::http_request request)
     const auto LastDotIndex = FileName.find_last_of('.');
     if (LastDotIndex == std::string::npos)
     {
-        request.reply(web::http::status_codes::BadRequest, U("No file extension was found."));
+        Request.reply(web::http::status_codes::BadRequest, U("No file extension was found."));
         return;
     }
 
@@ -224,38 +224,39 @@ void OrionWebServer::HandleStaticFileEndpoint(web::http::http_request request)
     // Stream the file to the response
     concurrency::streams::fstream::open_istream(FileName)
         .then(
-            [request, ContentType](concurrency::streams::istream is)
+            [Request, ContentType](concurrency::streams::istream StaticFileInputStream)
             {
                 // Send the response
-                request.reply(web::http::status_codes::OK, is, ContentType);
+                Request.reply(web::http::status_codes::OK, StaticFileInputStream, ContentType);
             })
         .then(
-            [FileName, request](pplx::task<void> t)
+            [FileName, Request](pplx::task<void> OpenStreamTask)
             {
                 try
                 {
-                    t.get();
+                    OpenStreamTask.get();
                 }
-                catch (std::exception& e)
+                catch (std::exception& Exception)
                 {
-                    std::cerr << e.what() << std::endl;
-                    std::cout << e.what() << std::endl;
+                    std::cerr << Exception.what() << std::endl;
+                    std::cout << Exception.what() << std::endl;
 
-                    request.reply(web::http::status_codes::NotFound, U("The file ") + FileName + U(" was not found."));
+                    Request.reply(web::http::status_codes::NotFound,
+                                  U("The file ") + FileName + U(" was not found: ") + std::string(Exception.what()));
                 }
             });
 }
 
-void OrionWebServer::HandleAudioFileEndpoint(web::http::http_request request)
+void OrionWebServer::HandleAudioFileEndpoint(web::http::http_request Request)
 {
     // Get the file name from the request path
-    auto FileName = request.request_uri().path();
+    auto FileName = Request.request_uri().path();
 
     // Remove the leading slash
     FileName = FileName.substr(1);
 
     // Calculate the content type
-    auto ContentType = U("audio/mpeg");
+    std::string ContentType = U("audio/mpeg");
     if (FileName.find(U(".opus")) != std::string::npos)
     {
         ContentType = U("audio/ogg");
@@ -276,174 +277,175 @@ void OrionWebServer::HandleAudioFileEndpoint(web::http::http_request request)
     // Stream the file to the response
     concurrency::streams::fstream::open_istream(FileName)
         .then(
-            [request, ContentType](concurrency::streams::istream is)
+            [Request, ContentType](concurrency::streams::istream AudioFileInputStream)
             {
                 // Send the response.  Make sure to specify the content type
-                request.reply(web::http::status_codes::OK, is, ContentType);
+                Request.reply(web::http::status_codes::OK, AudioFileInputStream, ContentType);
             })
         .then(
-            [FileName, request](pplx::task<void> t)
+            [FileName, Request](pplx::task<void> OpenStreamTask)
             {
                 try
                 {
-                    t.get();
+                    OpenStreamTask.get();
                 }
-                catch (std::exception& e)
+                catch (std::exception& Exception)
                 {
-                    std::cerr << e.what() << std::endl;
-                    std::cout << e.what() << std::endl;
+                    std::cerr << Exception.what() << std::endl;
+                    std::cout << Exception.what() << std::endl;
 
-                    request.reply(web::http::status_codes::NotFound, U("The file ") + FileName + U(" was not found."));
+                    Request.reply(web::http::status_codes::NotFound,
+                                  U("The file ") + FileName + U(" was not found: ") + std::string(Exception.what()));
                 }
             });
 }
 
-void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request request)
+void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request Request)
 {
     // Get the message from the request body
-    request.extract_string()
-        .then([this, request](pplx::task<std::string> task) { return task.get(); })
+    Request.extract_string()
+        .then([this, Request](pplx::task<std::string> ExtractJsonTask) { return ExtractJsonTask.get(); })
         .then(
-            [this, request](std::string message)
+            [this, Request](std::string RequestMessage)
             {
                 // Convert the message to markdown
-                auto        szMarkdown = cmark_markdown_to_html(message.c_str(), message.length(), CMARK_OPT_UNSAFE);
-                std::string Markdown   = szMarkdown;
-                free(szMarkdown);
+                auto        pMarkdown = cmark_markdown_to_html(RequestMessage.c_str(), RequestMessage.length(), CMARK_OPT_UNSAFE);
+                std::string Markdown  = pMarkdown;
+                free(pMarkdown);
 
                 // Send the response
-                request.reply(web::http::status_codes::OK, Markdown)
+                Request.reply(web::http::status_codes::OK, Markdown)
                     .then(
-                        [this](pplx::task<void> t)
+                        [this](pplx::task<void> ReplyTask)
                         {
                             try
                             {
-                                t.get();
+                                ReplyTask.get();
                             }
-                            catch (std::exception& e)
+                            catch (std::exception& Exception)
                             {
-                                std::cerr << e.what() << std::endl;
-                                std::cout << e.what() << std::endl;
+                                std::cerr << Exception.what() << std::endl;
+                                std::cout << Exception.what() << std::endl;
                             }
                         });
             });
 }
 
-void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request request)
+void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
 {
     // Check for the X-Orion-Id header
-    if (!request.headers().has(U("X-Orion-Id")))
+    if (!Request.headers().has(U("X-Orion-Id")))
     {
-        request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
+        Request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
         return;
     }
 
     // Get the Orion instance id from the header
-    auto OrionID = request.headers().find(U("X-Orion-Id"))->second;
+    auto OrionID = Request.headers().find(U("X-Orion-Id"))->second;
 
     // Find the Orion instance with the given id
     auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
-                                [OrionID](const std::unique_ptr<Orion>& orion) { return orion->GetCurrentAssistantID() == OrionID; });
+                                [OrionID](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == OrionID; });
 
     // Check if the Orion instance was found
     if (OrionIt == m_OrionInstances.end())
     {
-        request.reply(web::http::status_codes::BadRequest, U("The Orion instance with the given id was not found."));
+        Request.reply(web::http::status_codes::BadRequest, U("The Orion instance with the given id was not found."));
         return;
     }
 
     // Get the chat history
     (*OrionIt)->GetChatHistoryAsync().then(
-        [this, &request](web::json::value chatHistory)
+        [this, &Request](web::json::value ChatHistory)
         {
             // Check if the query parameter is present
-            bool bMarkDown = request.request_uri().query().find(U("markdown=true")) != std::string::npos;
+            bool IsMarkdownRequested = Request.request_uri().query().find(U("markdown=true")) != std::string::npos;
 
             // Convert the chat history to markdown if the query parameter is present
-            if (bMarkDown)
+            if (IsMarkdownRequested)
             {
-                for (auto& JMessage : chatHistory.as_array())
+                for (auto& JMessage : ChatHistory.as_array())
                 {
                     auto Message           = JMessage.at(U("message")).as_string();
-                    auto szMarkdown        = cmark_markdown_to_html(Message.c_str(), Message.length(), CMARK_OPT_UNSAFE);
-                    JMessage[U("message")] = web::json::value::string(szMarkdown);
-                    free(szMarkdown);
+                    auto pMarkdown         = cmark_markdown_to_html(Message.c_str(), Message.length(), CMARK_OPT_UNSAFE);
+                    JMessage[U("message")] = web::json::value::string(pMarkdown);
+                    free(pMarkdown);
                 }
             }
 
             // Send the response
-            request.reply(web::http::status_codes::OK, chatHistory);
+            Request.reply(web::http::status_codes::OK, ChatHistory);
         });
 }
 
-void OrionWebServer::HandleSpeakEndpoint(web::http::http_request request)
+void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
 {
     // Check for the X-Orion-Id header
-    if (!request.headers().has(U("X-Orion-Id")))
+    if (!Request.headers().has(U("X-Orion-Id")))
     {
-        request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
+        Request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
         return;
     }
 
     // Get the Orion instance id from the header
-    auto OrionID = request.headers().find(U("X-Orion-Id"))->second;
+    auto OrionID = Request.headers().find(U("X-Orion-Id"))->second;
 
     // Find the Orion instance with the given id
     auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
-                                [OrionID](const std::unique_ptr<Orion>& orion) { return orion->GetCurrentAssistantID() == OrionID; });
+                                [OrionID](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == OrionID; });
 
     // Check if the Orion instance was found
     if (OrionIt == m_OrionInstances.end())
     {
-        request.reply(web::http::status_codes::BadRequest, U("The Orion instance with the given id was not found."));
+        Request.reply(web::http::status_codes::BadRequest, U("The Orion instance with the given id was not found."));
         return;
     }
 
     // Get the message from the request body
-    request.extract_string()
-        .then([this, OrionIt, request](pplx::task<std::string> task) { return task.get(); })
+    Request.extract_string()
+        .then([this, OrionIt, Request](pplx::task<std::string> ExtractJsonTask) { return ExtractJsonTask.get(); })
         .then(
-            [this, OrionIt, request](std::string message)
+            [this, OrionIt, Request](std::string RequestMessage)
             {
                 // Get the audio format from the query parameter
-                ETTSAudioFormat eAudioFormat = ETTSAudioFormat::Mp3;
-                if (request.request_uri().query().find(U("format=opus")) != std::string::npos)
+                ETTSAudioFormat AudioFormat = ETTSAudioFormat::MP3;
+                if (Request.request_uri().query().find(U("format=opus")) != std::string::npos)
                 {
-                    eAudioFormat = ETTSAudioFormat::Opus;
+                    AudioFormat = ETTSAudioFormat::Opus;
                 }
-                else if (request.request_uri().query().find(U("format=flac")) != std::string::npos)
+                else if (Request.request_uri().query().find(U("format=flac")) != std::string::npos)
                 {
-                    eAudioFormat = ETTSAudioFormat::Flac;
+                    AudioFormat = ETTSAudioFormat::FLAC;
                 }
-                else if (request.request_uri().query().find(U("format=aac")) != std::string::npos)
+                else if (Request.request_uri().query().find(U("format=aac")) != std::string::npos)
                 {
-                    eAudioFormat = ETTSAudioFormat::AAC;
+                    AudioFormat = ETTSAudioFormat::AAC;
                 }
-                else if (request.request_uri().query().find(U("format=pcm")) != std::string::npos)
+                else if (Request.request_uri().query().find(U("format=pcm")) != std::string::npos)
                 {
-                    eAudioFormat = ETTSAudioFormat::PCM;
+                    AudioFormat = ETTSAudioFormat::PCM;
                 }
-                else if (request.request_uri().query().find(U("format=wav")) != std::string::npos)
+                else if (Request.request_uri().query().find(U("format=wav")) != std::string::npos)
                 {
-                    eAudioFormat = ETTSAudioFormat::Wav;
+                    AudioFormat = ETTSAudioFormat::Wav;
                 }
 
                 // Make Orion speak the message
                 (*OrionIt)
-                    ->SpeakAsync(message, eAudioFormat)
+                    ->SpeakAsync(RequestMessage, AudioFormat)
                     .then(
-                        [this, request]()
+                        [this, Request]()
                         {
                             // Send the response
-                            request.reply(web::http::status_codes::OK);
+                            Request.reply(web::http::status_codes::OK);
                         });
             });
 }
 
-void OrionWebServer::HandleCreateOrionEndpoint(web::http::http_request request)
+void OrionWebServer::HandleCreateOrionEndpoint(web::http::http_request Request)
 {
     // Get the Orion instance id from the query parameter "id"
-    auto Query   = request.request_uri().query();
+    auto Query   = Request.request_uri().query();
     auto OrionID = std::string();
     if (!Query.empty())
     {
@@ -482,5 +484,5 @@ void OrionWebServer::HandleCreateOrionEndpoint(web::http::http_request request)
     m_OrionInstances.push_back(std::move(NewOrion));
 
     // Send the response
-    request.reply(web::http::status_codes::OK, web::json::value::parse(U("{ \"id\": \"") + OrionID + U("\" }")));
+    Request.reply(web::http::status_codes::OK, web::json::value::parse(U("{ \"id\": \"") + OrionID + U("\" }")));
 }

@@ -29,7 +29,7 @@ std::string ChangeIntelligenceFunctionTool::Execute(Orion& orion, const web::jso
             }
             else if (intelligence == "super")
             {
-                orion.SetNewIntelligence(EOrionIntelligence::Super);
+                orion.SetNewIntelligence(EOrionIntelligence::Advanced);
                 return std::string(R"({"message": "Changed intelligence to super"})");
             }
             else

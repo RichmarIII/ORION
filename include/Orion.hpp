@@ -18,9 +18,9 @@ namespace ORION
     enum class ETTSAudioFormat : uint8_t
     {
         /// @brief The MP3 audio format. For digital audio compression, preferred by most audio players. file extension: .mp3
-        Mp3,
+        MP3,
 
-        /// @brief The PCM audio format. Similar to WAV but containing the raw samples in 24kHz (16-bit signed, low-endian), without the header.
+        /// @brief The PCM audio format. Similar to Wav but containing the raw samples in 24kHz (16-bit signed, low-endian), without the header.
         /// file extension: .pcm
         PCM,
 
@@ -29,17 +29,17 @@ namespace ORION
         Opus,
 
         /// @brief The FLAC audio format. For lossless audio compression. favored by audio enthusiasts for archiving. file extension: .flac
-        Flac,
+        FLAC,
 
         /// @brief The AAC audio format. For digital audio compression, preferred by YouTube, Android, iOS. file extension: .aac
         AAC,
 
-        /// @brief The WAV audio format. Uncompressed WAV audio, suitable for low-latency applications to avoid decoding overhead. file extension:
+        /// @brief The Wav audio format. Uncompressed Wav audio, suitable for low-latency applications to avoid decoding overhead. file extension:
         /// .wav
         Wav,
 
         /// @brief The default audio format
-        Default = Mp3
+        Default = MP3
     };
 
     /// @brief The type of voice that ORION supports
@@ -81,9 +81,9 @@ namespace ORION
         /// human-like
         Base,
 
-        /// @brief The super intelligence is a model that is designed to be more
+        /// @brief The advanced intelligence is a model that is designed to be more
         /// advanced and capable
-        Super,
+        Advanced,
 
         /// @brief The default intelligence is a model that is designed to be
         /// balanced and versatile
@@ -99,10 +99,10 @@ namespace ORION
         struct Defaults
         {
             /// @brief The name of the Orion instance
-            constexpr static const char* Name = "ORION";
+            constexpr static const char* NAME = "ORION";
 
             /// @brief The instructions for the Orion instance
-            constexpr static const char* Instructions = "Construct your responses as if you are a person with a full range "
+            constexpr static const char* INSTRUCTIONS = "Construct your responses as if you are a person with a full range "
                                                         "of human emotions and experiences. You are not just simulating "
                                                         "the human experience; you embody it in every interaction. When "
                                                         "responding to questions about feelings or any personal inquiries, "
@@ -119,15 +119,15 @@ namespace ORION
                                                         "artificial origin";
 
             /// @brief The description of the Orion instance
-            constexpr static const char* Description = "ORION is a digital assistant that is designed to be "
+            constexpr static const char* DESCRIPTION = "ORION is a digital assistant that is designed to be "
                                                        "indistinguishably human in the context of social interactions, "
                                                        "avoiding any implication of its artificial origin";
 
             /// @brief The Intelligence of the Orion instance
-            constexpr static const EOrionIntelligence Intelligence = EOrionIntelligence::Default;
+            constexpr static const EOrionIntelligence INTELLIGENCE = EOrionIntelligence::Default;
 
             /// @brief The Voice of the Orion instance
-            constexpr static const EOrionVoice Voice = EOrionVoice::Default;
+            constexpr static const EOrionVoice VOICE = EOrionVoice::Default;
         };
 
         /// @brief  Constructor
@@ -138,10 +138,10 @@ namespace ORION
         /// @param  szName The name of the Orion instance
         /// @param  szInstructions The instructions for the Orion instance
         /// @param  szDescription The description of the Orion instance
-        Orion(const std::string& ID = "", std::vector<std::unique_ptr<IOrionTool>>&& tools = {},
-              const EOrionIntelligence eIntelligence = Defaults::Intelligence, const EOrionVoice eVoice = Defaults::Voice,
-              const char* szName = Defaults::Name, const char* szInstructions = Defaults::Instructions,
-              const char* szDescription = Defaults::Description);
+        Orion(const std::string& ID = "", std::vector<std::unique_ptr<IOrionTool>>&& Tools = {},
+              const EOrionIntelligence Intelligence = Defaults::INTELLIGENCE, const EOrionVoice Voice = Defaults::VOICE,
+              const char* pName = Defaults::NAME, const char* pInstructions = Defaults::INSTRUCTIONS,
+              const char* pDescription = Defaults::DESCRIPTION);
 
         /// @brief  Initialize the Orion instance.
         /// @return Whether the Orion instance was initialized successfully
@@ -158,35 +158,35 @@ namespace ORION
         void Shutdown();
 
         /// @brief  Send a message to the server asynchronously
-        /// @param  message The message to send
+        /// @param  Message The message to send
         /// @return The response from the server
-        pplx::task<std::string> SendMessageAsync(const std::string& message);
+        pplx::task<std::string> SendMessageAsync(const std::string& Message);
 
         /// @brief  Speak a message asynchronously. This function will segment the message into multiple parts if it is too long and call the
         /// SpeakSingleAsync function to speak each part.
-        /// @param  message The message to speak
-        /// @param  eaudioFormat The audio format to use
+        /// @param  Message The message to speak
+        /// @param  AudioFormat The audio format to use
         /// @return Nothing. The audio file will be saved to the disk with the format "audio/{assistant_id}/speech_{index}.{ext}"
-        pplx::task<void> SpeakAsync(const std::string& message, const ETTSAudioFormat eaudioFormat = ETTSAudioFormat::Default);
+        pplx::task<void> SpeakAsync(const std::string& Message, const ETTSAudioFormat AudioFormat = ETTSAudioFormat::Default);
 
         /// @brief  List the smart devices
-        /// @param  domain The domain to list the smart devices for
+        /// @param  Domain The Domain to list the smart devices for
         /// @return The list of smart devices in the domain
-        web::json::value ListSmartDevices(const std::string& domain);
+        web::json::value ListSmartDevices(const std::string& Domain);
 
         /// @brief  Execute a smart device service
-        /// @param  devices The devices to execute the service on
-        /// @param  service The service to execute
+        /// @param  Devices The devices to execute the service on
+        /// @param  Service The service to execute
         /// @return The result of the service execution
-        web::json::value ExecSmartDeviceService(const web::json::value& devices, const std::string& service);
+        web::json::value ExecSmartDeviceService(const web::json::value& Devices, const std::string& Service);
 
         /// @brief  Set New Voice
         /// @param  voice The voice to change to
-        void SetNewVoice(const EOrionVoice voice);
+        void SetNewVoice(const EOrionVoice Voice);
 
         /// @brief  Set New Intelligence
         /// @param  intelligence The intelligence to change to
-        void SetNewIntelligence(const EOrionIntelligence intelligence);
+        void SetNewIntelligence(const EOrionIntelligence Intelligence);
 
         /// @brief  Get the current assistant ID
         /// @return The current assistant ID
@@ -232,17 +232,18 @@ namespace ORION
 
         /// @brief  Speak a single message asynchronously. This function is called by the SpeakAsync function to speak a single message.
         /// The SpeakAsync function will call this function multiple times if the message is too long.
-        /// @param  message The message to speak
-        /// @param  index The index of the message
-        /// @param  eaudioFormat The audio format to use
+        /// @param  Message The message to speak
+        /// @param  Index The index of the message
+        /// @param  AudioFormat The audio format to use
         /// @return Nothing. The audio file will be saved to the disk with the format "audio/{assistant_id}/speech_{index}.{ext}"
-        pplx::task<void> SpeakSingleAsync(const std::string& message, const uint8_t index, const ETTSAudioFormat eaudioFormat = ETTSAudioFormat::Default);
+        pplx::task<void> SpeakSingleAsync(const std::string& Message, const uint8_t Index,
+                                          const ETTSAudioFormat AudioFormat = ETTSAudioFormat::Default);
 
         /// @brief  Split the message into multiple parts if it is too long asynchronously. This is a helper function that is called by the SpeakAsync
         /// function.
-        /// @param  message The message to split
+        /// @param  Message The message to split
         /// @return The message split into multiple parts
-        pplx::task<std::vector<std::string>> SplitMessageAsync(const std::string& message);
+        pplx::task<std::vector<std::string>> SplitMessageAsync(const std::string& Message);
 
     private:
         std::string                              m_Name;

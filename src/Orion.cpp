@@ -20,14 +20,14 @@
 
 using namespace ORION;
 
-Orion::Orion(const std::string& ID, std::vector<std::unique_ptr<IOrionTool>>&& tools, const EOrionIntelligence eIntelligence,
-             const EOrionVoice eVoice, const char* szName, const char* szInstructions, const char* szDescription)
-    : m_Tools(std::move(tools)),
-      m_CurrentIntelligence(eIntelligence),
-      m_CurrentVoice(eVoice),
-      m_Name(szName),
-      m_Instructions(szInstructions),
-      m_Description(szDescription)
+Orion::Orion(const std::string& ID, std::vector<std::unique_ptr<IOrionTool>>&& Tools, const EOrionIntelligence Intelligence, const EOrionVoice Voice,
+             const char* pName, const char* pInstructions, const char* pDescription)
+    : m_Tools(std::move(Tools)),
+      m_CurrentIntelligence(Intelligence),
+      m_CurrentVoice(Voice),
+      m_Name(pName),
+      m_Instructions(pInstructions),
+      m_Description(pDescription)
 {
     m_Instructions = "Your name is " + m_Name + ". " + m_Instructions;
 
@@ -46,8 +46,7 @@ bool ORION::Orion::Initialize()
 
     return true;
 }
-
-pplx::task<std::string> Orion::SendMessageAsync(const std::string& message)
+pplx::task<std::string> Orion::SendMessageAsync(const std::string& Message)
 {
     // Create a message in the openai thread
     web::http::http_request CreateMessageRequest(web::http::methods::POST);
@@ -57,19 +56,19 @@ pplx::task<std::string> Orion::SendMessageAsync(const std::string& message)
     CreateMessageRequest.headers().add("Content-Type", "application/json");
 
     web::json::value CreateMessageBody = web::json::value::object();
-    CreateMessageBody["content"]       = web::json::value::string(message);
+    CreateMessageBody["content"]       = web::json::value::string(Message);
     CreateMessageBody["role"]          = web::json::value::string("user");
     CreateMessageRequest.set_body(CreateMessageBody);
 
     return m_OpenAIClient->request(CreateMessageRequest)
         .then(
-            [this](web::http::http_response createMessageResponse)
+            [this](web::http::http_response CreateMessageResponse)
             {
-                if (createMessageResponse.status_code() != web::http::status_codes::OK)
+                if (CreateMessageResponse.status_code() != web::http::status_codes::OK)
                 {
                     std::cerr << "Failed to create a new message" << std::endl;
-                    std::cout << createMessageResponse.to_string() << std::endl;
-                    return pplx::task_from_result(std::string("Failed to create a new message: " + createMessageResponse.to_string()));
+                    std::cout << CreateMessageResponse.to_string() << std::endl;
+                    return pplx::task_from_result(std::string("Failed to create a new message: " + CreateMessageResponse.to_string()));
                 }
 
                 // run the assistant
@@ -89,22 +88,22 @@ pplx::task<std::string> Orion::SendMessageAsync(const std::string& message)
 
                 return m_OpenAIClient->request(CreateRunRequest)
                     .then(
-                        [this](web::http::http_response createRunResponse)
+                        [this](web::http::http_response CreateRunResponse)
                         {
-                            if (createRunResponse.status_code() != web::http::status_codes::OK)
+                            if (CreateRunResponse.status_code() != web::http::status_codes::OK)
                             {
                                 std::cerr << "Failed to run the assistant" << std::endl;
-                                std::cout << createRunResponse.to_string() << std::endl;
-                                return pplx::task_from_result(std::string("Failed to run the assistant: " + createRunResponse.to_string()));
+                                std::cout << CreateRunResponse.to_string() << std::endl;
+                                return pplx::task_from_result(std::string("Failed to run the assistant: " + CreateRunResponse.to_string()));
                             }
 
-                            std::string runID = createRunResponse.extract_json().get().at("id").as_string();
+                            std::string RunID = CreateRunResponse.extract_json().get().at("id").as_string();
 
                             // Get the response from the openai assistant
                             while (true)
                             {
                                 auto CheckRunStatusRequest = web::http::http_request(web::http::methods::GET);
-                                CheckRunStatusRequest.set_request_uri(U("threads/" + m_CurrentThreadID + "/runs/" + runID));
+                                CheckRunStatusRequest.set_request_uri(U("threads/" + m_CurrentThreadID + "/runs/" + RunID));
                                 CheckRunStatusRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
                                 CheckRunStatusRequest.headers().add("OpenAI-Beta", "assistants=v1");
 
@@ -118,53 +117,53 @@ pplx::task<std::string> Orion::SendMessageAsync(const std::string& message)
                                         std::string("Failed to get the response from the assistant: " + CheckRunStatusResponse.to_string()));
                                 }
 
-                                web::json::value json = CheckRunStatusResponse.extract_json().get();
+                                web::json::value Json = CheckRunStatusResponse.extract_json().get();
 
-                                if (json.at("status").as_string() == "completed")
+                                if (Json.at("status").as_string() == "completed")
                                 {
                                     break;
                                 }
-                                else if (json.at("status").as_string() == "failed")
+                                else if (Json.at("status").as_string() == "failed")
                                 {
                                     return pplx::task_from_result(std::string("The request has failed"));
                                 }
-                                else if (json.at("status").as_string() == "expired")
+                                else if (Json.at("status").as_string() == "expired")
                                 {
                                     return pplx::task_from_result(std::string("The request has expired"));
                                 }
-                                else if (json.at("status").as_string() == "cancelled")
+                                else if (Json.at("status").as_string() == "cancelled")
                                 {
                                     return pplx::task_from_result(std::string("The request has been cancelled"));
                                 }
-                                else if (json.at("status").as_string() == "queued")
+                                else if (Json.at("status").as_string() == "queued")
                                 {
                                     // Do nothing
                                 }
-                                else if (json.at("status").as_string() == "requires_action")
+                                else if (Json.at("status").as_string() == "requires_action")
                                 {
                                     // Check if the thread wants to run a tool
-                                    web::json::value toolCallResults = web::json::value::array();
-                                    for (const auto& toolCall : json.at("required_action").at("submit_tool_outputs").at("tool_calls").as_array())
+                                    web::json::value ToolCallResults = web::json::value::array();
+                                    for (const auto& ToolCall : Json.at("required_action").at("submit_tool_outputs").at("tool_calls").as_array())
                                     {
-                                        if (toolCall.at("type").as_string() == "function")
+                                        if (ToolCall.at("type").as_string() == "function")
                                         {
                                             // Get tool from available tools by name
-                                            auto tool = std::find_if(m_Tools.begin(), m_Tools.end(),
-                                                                     [&](const auto& t)
-                                                                     { return t->GetName() == toolCall.at("function").at("name").as_string(); });
+                                            auto Tool = std::find_if(m_Tools.begin(), m_Tools.end(),
+                                                                     [&](const auto& Item)
+                                                                     { return Item->GetName() == ToolCall.at("function").at("name").as_string(); });
 
-                                            if (tool != m_Tools.end())
+                                            if (Tool != m_Tools.end())
                                             {
                                                 // Call the tool
-                                                auto pFunctionTool = static_cast<FunctionTool*>(tool->get());
-                                                auto arguments     = toolCall.at("function").at("arguments").as_string();
-                                                auto output        = pFunctionTool->Execute(*this, web::json::value::parse(arguments));
+                                                auto pFunctionTool = static_cast<FunctionTool*>(Tool->get());
+                                                auto Arguments     = ToolCall.at("function").at("arguments").as_string();
+                                                auto Output        = pFunctionTool->Execute(*this, web::json::value::parse(Arguments));
 
                                                 // Append the tool call results
-                                                web::json::value toolCallResult         = web::json::value::object();
-                                                toolCallResult["tool_call_id"]          = toolCall.at("id");
-                                                toolCallResult["output"]                = web::json::value::string(output);
-                                                toolCallResults[toolCallResults.size()] = toolCallResult;
+                                                web::json::value ToolCallResult         = web::json::value::object();
+                                                ToolCallResult["tool_call_id"]          = ToolCall.at("id");
+                                                ToolCallResult["output"]                = web::json::value::string(Output);
+                                                ToolCallResults[ToolCallResults.size()] = ToolCallResult;
                                             }
                                         }
                                     }
@@ -172,14 +171,14 @@ pplx::task<std::string> Orion::SendMessageAsync(const std::string& message)
                                     // Submit the tool call results
                                     auto SubmitToolOutputsRequest = web::http::http_request(web::http::methods::POST);
                                     SubmitToolOutputsRequest.set_request_uri(
-                                        U("threads/" + m_CurrentThreadID + "/runs/" + runID + "/submit_tool_outputs"));
+                                        U("threads/" + m_CurrentThreadID + "/runs/" + RunID + "/submit_tool_outputs"));
                                     SubmitToolOutputsRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
                                     SubmitToolOutputsRequest.headers().add("OpenAI-Beta", "assistants=v1");
                                     SubmitToolOutputsRequest.headers().add("Content-Type", "application/json");
 
-                                    auto tool_outputs            = web::json::value::object();
-                                    tool_outputs["tool_outputs"] = toolCallResults;
-                                    SubmitToolOutputsRequest.set_body(tool_outputs);
+                                    auto ToolOutputs            = web::json::value::object();
+                                    ToolOutputs["tool_outputs"] = ToolCallResults;
+                                    SubmitToolOutputsRequest.set_body(ToolOutputs);
 
                                     auto SubmitToolOutputsResponse = m_OpenAIClient->request(SubmitToolOutputsRequest).get();
 
@@ -191,15 +190,15 @@ pplx::task<std::string> Orion::SendMessageAsync(const std::string& message)
                                             std::string("Failed to submit the tool call results: " + SubmitToolOutputsResponse.to_string()));
                                     }
                                 }
-                                else if (json.at("status").as_string() == "in_progress")
+                                else if (Json.at("status").as_string() == "in_progress")
                                 {
                                     // Do nothing
                                 }
                                 else
                                 {
-                                    std::cerr << "Unknown status: " << json.at("status").as_string() << std::endl;
+                                    std::cerr << "Unknown status: " << Json.at("status").as_string() << std::endl;
                                     std::cout << CheckRunStatusResponse.to_string() << std::endl;
-                                    return pplx::task_from_result(std::string("Unknown status: " + json.at("status").as_string()));
+                                    return pplx::task_from_result(std::string("Unknown status: " + Json.at("status").as_string()));
                                 }
 
                                 // Sleep for 1 second before checking the status again
@@ -213,10 +212,10 @@ pplx::task<std::string> Orion::SendMessageAsync(const std::string& message)
                             ListMessagesRequest.headers().add("Content-Type", "application/json");
 
                             // Set the request URI
-                            web::uri_builder builder;
-                            builder.append_path("threads/" + m_CurrentThreadID + "/messages");
-                            builder.append_query("limit", 5);
-                            ListMessagesRequest.set_request_uri(builder.to_string());
+                            web::uri_builder ListMessagesRequestURIBuilder;
+                            ListMessagesRequestURIBuilder.append_path("threads/" + m_CurrentThreadID + "/messages");
+                            ListMessagesRequestURIBuilder.append_query("limit", 5);
+                            ListMessagesRequest.set_request_uri(ListMessagesRequestURIBuilder.to_string());
 
                             auto ListMessagesResponse = m_OpenAIClient->request(ListMessagesRequest).get();
 
@@ -227,22 +226,22 @@ pplx::task<std::string> Orion::SendMessageAsync(const std::string& message)
                                     std::string("Failed to get the response from the assistant: " + ListMessagesResponse.to_string()));
                             }
 
-                            web::json::value threadMessages = ListMessagesResponse.extract_json().get();
+                            web::json::value ThreadMessages = ListMessagesResponse.extract_json().get();
 
                             std::vector<std::string> NewMessages;
-                            for (const auto& threadMessage : threadMessages.at("data").as_array())
+                            for (const auto& ThreadMessage : ThreadMessages.at("data").as_array())
                             {
-                                if (threadMessage.at("role").as_string() == "assistant")
+                                if (ThreadMessage.at("role").as_string() == "assistant")
                                 {
-                                    for (const auto& content : threadMessage.at("content").as_array())
+                                    for (const auto& Content : ThreadMessage.at("content").as_array())
                                     {
-                                        if (content.at("type").as_string() == "text")
+                                        if (Content.at("type").as_string() == "text")
                                         {
-                                            NewMessages.push_back(content.at("text").at("value").as_string());
+                                            NewMessages.push_back(Content.at("text").at("value").as_string());
                                         }
                                     }
                                 }
-                                else if (threadMessage.at("role").as_string() == "user")
+                                else if (ThreadMessage.at("role").as_string() == "user")
                                 {
                                     break;
                                 }
@@ -250,9 +249,9 @@ pplx::task<std::string> Orion::SendMessageAsync(const std::string& message)
 
                             // Combine the messages
                             std::string CombinedMessage;
-                            for (const auto& message : NewMessages)
+                            for (const auto& Message : NewMessages)
                             {
-                                CombinedMessage += message + " \n";
+                                CombinedMessage += Message + " \n";
                             }
 
                             return pplx::task_from_result(CombinedMessage);
@@ -263,22 +262,22 @@ pplx::task<std::string> Orion::SendMessageAsync(const std::string& message)
 void Orion::CreateAssistant()
 {
     // Check if an assistant already exists on the server
-    web::http::http_request request(web::http::methods::GET);
-    request.set_request_uri(U("assistants"));
-    request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    request.headers().add("OpenAI-Beta", "assistants=v1");
+    web::http::http_request ListAssistantsRequest(web::http::methods::GET);
+    ListAssistantsRequest.set_request_uri(U("assistants"));
+    ListAssistantsRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+    ListAssistantsRequest.headers().add("OpenAI-Beta", "assistants=v1");
 
-    web::http::http_response response = m_OpenAIClient->request(request).get();
+    web::http::http_response ListAssistantsResponse = m_OpenAIClient->request(ListAssistantsRequest).get();
 
-    bool bAssistantExists = false;
-    if (response.status_code() == web::http::status_codes::OK)
+    bool DoesAssistantExist = false;
+    if (ListAssistantsResponse.status_code() == web::http::status_codes::OK)
     {
-        web::json::value json = response.extract_json().get();
-        for (const auto& assistant : json.at("data").as_array())
+        web::json::value Json = ListAssistantsResponse.extract_json().get();
+        for (const auto& Assistant : Json.at("data").as_array())
         {
-            if (assistant.at("id").as_string() == m_CurrentAssistantID)
+            if (Assistant.at("id").as_string() == m_CurrentAssistantID)
             {
-                bAssistantExists = true;
+                DoesAssistantExist = true;
                 break;
             }
         }
@@ -289,84 +288,86 @@ void Orion::CreateAssistant()
         return;
     }
 
-    if (bAssistantExists)
+    if (DoesAssistantExist)
     {
         // Update the assistant
-        web::http::http_request request(web::http::methods::POST);
-        request.set_request_uri(U("assistants/" + m_CurrentAssistantID));
-        request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-        request.headers().add("OpenAI-Beta", "assistants=v1");
-        request.headers().add("Content-Type", "application/json");
+        web::http::http_request UpdateAssistantRequest(web::http::methods::POST);
+        UpdateAssistantRequest.set_request_uri(U("assistants/" + m_CurrentAssistantID));
+        UpdateAssistantRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+        UpdateAssistantRequest.headers().add("OpenAI-Beta", "assistants=v1");
+        UpdateAssistantRequest.headers().add("Content-Type", "application/json");
 
-        web::json::value body = web::json::value::object();
-        body["instructions"]  = web::json::value::string(m_Instructions);
-        body["description"]   = web::json::value::string(m_Description);
-        body["model"]         = web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
+        web::json::value UpdateAssistantRequestBody = web::json::value::object();
+        UpdateAssistantRequestBody["instructions"]  = web::json::value::string(m_Instructions);
+        UpdateAssistantRequestBody["description"]   = web::json::value::string(m_Description);
+        UpdateAssistantRequestBody["model"] =
+            web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
 
         if (!m_Tools.empty())
         {
-            web::json::value tools = web::json::value::array();
-            for (const auto& tool : m_Tools)
+            web::json::value Tools = web::json::value::array();
+            for (const auto& Tool : m_Tools)
             {
-                printf("Adding tool: %s\n", tool->GetName().c_str());
-                tools[tools.size()] = web::json::value::parse(tool->ToJson());
+                printf("Adding tool: %s\n", Tool->GetName().c_str());
+                Tools[Tools.size()] = web::json::value::parse(Tool->ToJson());
             }
-            body["tools"] = tools;
+            UpdateAssistantRequestBody["tools"] = Tools;
         }
 
-        request.set_body(body);
+        UpdateAssistantRequest.set_body(UpdateAssistantRequestBody);
 
-        web::http::http_response response = m_OpenAIClient->request(request).get();
+        web::http::http_response UpdateAssistantResponse = m_OpenAIClient->request(UpdateAssistantRequest).get();
 
-        if (response.status_code() != web::http::status_codes::OK)
+        if (UpdateAssistantResponse.status_code() != web::http::status_codes::OK)
         {
             std::cerr << "Failed to update the assistant" << std::endl;
 
             // Print the response
-            std::cout << response.to_string() << std::endl;
+            std::cout << UpdateAssistantResponse.to_string() << std::endl;
         }
     }
     else
     {
         // Create a new assistant
-        web::http::http_request request(web::http::methods::POST);
-        request.set_request_uri(U("assistants"));
-        request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-        request.headers().add("OpenAI-Beta", "assistants=v1");
-        request.headers().add("Content-Type", "application/json");
+        web::http::http_request CreateAssistantRequest(web::http::methods::POST);
+        CreateAssistantRequest.set_request_uri(U("assistants"));
+        CreateAssistantRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+        CreateAssistantRequest.headers().add("OpenAI-Beta", "assistants=v1");
+        CreateAssistantRequest.headers().add("Content-Type", "application/json");
 
-        web::json::value body = web::json::value::object();
-        body["name"]          = web::json::value::string(m_Name);
-        body["instructions"]  = web::json::value::string(m_Instructions);
-        body["description"]   = web::json::value::string(m_Description);
-        body["model"]         = web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
+        web::json::value CreateAssistantRequestBody = web::json::value::object();
+        CreateAssistantRequestBody["name"]          = web::json::value::string(m_Name);
+        CreateAssistantRequestBody["instructions"]  = web::json::value::string(m_Instructions);
+        CreateAssistantRequestBody["description"]   = web::json::value::string(m_Description);
+        CreateAssistantRequestBody["model"] =
+            web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
 
         if (!m_Tools.empty())
         {
-            web::json::value tools = web::json::value::array();
-            for (const auto& tool : m_Tools)
+            web::json::value Tools = web::json::value::array();
+            for (const auto& Tool : m_Tools)
             {
-                printf("Adding tool: %s\n", tool->GetName().c_str());
-                tools[tools.size()] = web::json::value::parse(tool->ToJson());
+                printf("Adding tool: %s\n", Tool->GetName().c_str());
+                Tools[Tools.size()] = web::json::value::parse(Tool->ToJson());
             }
-            body["tools"] = tools;
+            CreateAssistantRequestBody["tools"] = Tools;
         }
 
-        request.set_body(body);
+        CreateAssistantRequest.set_body(CreateAssistantRequestBody);
 
-        web::http::http_response response = m_OpenAIClient->request(request).get();
+        web::http::http_response CreateAssistantResponse = m_OpenAIClient->request(CreateAssistantRequest).get();
 
-        if (response.status_code() == web::http::status_codes::OK)
+        if (CreateAssistantResponse.status_code() == web::http::status_codes::OK)
         {
-            web::json::value json = response.extract_json().get();
-            m_CurrentAssistantID  = json.at("id").as_string();
+            web::json::value Json = CreateAssistantResponse.extract_json().get();
+            m_CurrentAssistantID  = Json.at("id").as_string();
         }
         else
         {
             std::cerr << "Failed to create a new assistant" << std::endl;
 
             // Print the response
-            std::cout << response.to_string() << std::endl;
+            std::cout << CreateAssistantResponse.to_string() << std::endl;
         }
     }
 }
@@ -374,19 +375,19 @@ void Orion::CreateAssistant()
 void Orion::CreateThread()
 {
     // Create a new thread
-    web::http::http_request request(web::http::methods::POST);
-    request.set_request_uri(U("threads"));
-    request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    request.headers().add("OpenAI-Beta", "assistants=v1");
-    request.headers().add("Content-Type", "application/json");
-    request.set_body(web::json::value::object());
+    web::http::http_request CreateThreadRequest(web::http::methods::POST);
+    CreateThreadRequest.set_request_uri(U("threads"));
+    CreateThreadRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+    CreateThreadRequest.headers().add("OpenAI-Beta", "assistants=v1");
+    CreateThreadRequest.headers().add("Content-Type", "application/json");
+    CreateThreadRequest.set_body(web::json::value::object());
 
-    web::http::http_response response = m_OpenAIClient->request(request).get();
+    web::http::http_response CreateThreadResponse = m_OpenAIClient->request(CreateThreadRequest).get();
 
-    if (response.status_code() == web::http::status_codes::OK)
+    if (CreateThreadResponse.status_code() == web::http::status_codes::OK)
     {
-        web::json::value json = response.extract_json().get();
-        m_CurrentThreadID     = json.at("id").as_string();
+        web::json::value ResponseDataJson = CreateThreadResponse.extract_json().get();
+        m_CurrentThreadID                 = ResponseDataJson.at("id").as_string();
     }
     else
     {
@@ -401,9 +402,9 @@ void Orion::CreateClient()
 
     // Load the OpenAI API key from the environment or a file
     {
-        if (auto Key = std::getenv("OPENAI_API_KEY"); Key)
+        if (auto pKey = std::getenv("OPENAI_API_KEY"); pKey)
         {
-            m_OpenAIAPIKey = Key;
+            m_OpenAIAPIKey = pKey;
         }
         else
         {
@@ -420,9 +421,9 @@ void Orion::CreateClient()
 
     // Load the OpenWeather API key from the environment or a file
     {
-        if (auto Key = std::getenv("OPENWEATHER_API_KEY"); Key)
+        if (auto pKey = std::getenv("OPENWEATHER_API_KEY"); pKey)
         {
-            m_OpenWeatherAPIKey = Key;
+            m_OpenWeatherAPIKey = pKey;
         }
         else
         {
@@ -439,9 +440,9 @@ void Orion::CreateClient()
 
     // Load the Home Assistant API key from the environment or a file
     {
-        if (auto Key = std::getenv("HASS_API_KEY"); Key)
+        if (auto pKey = std::getenv("HASS_API_KEY"); pKey)
         {
-            m_HASSAPIKey = Key;
+            m_HASSAPIKey = pKey;
         }
         else
         {
@@ -457,31 +458,31 @@ void Orion::CreateClient()
     }
 }
 
-void Orion::SetNewVoice(const EOrionVoice voice)
+void Orion::SetNewVoice(const EOrionVoice Voice)
 {
-    m_CurrentVoice = voice;
+    m_CurrentVoice = Voice;
 }
 
-void Orion::SetNewIntelligence(const EOrionIntelligence intelligence)
+void Orion::SetNewIntelligence(const EOrionIntelligence Intelligence)
 {
-    m_CurrentIntelligence = intelligence;
+    m_CurrentIntelligence = Intelligence;
 }
 
-pplx::task<void> Orion::SpeakAsync(const std::string& message, const ETTSAudioFormat eaudioFormat)
+pplx::task<void> Orion::SpeakAsync(const std::string& Message, const ETTSAudioFormat AudioFormat)
 {
     // Split the message into multiple messages if it's too long
-    return SplitMessageAsync(message).then(
-        [this, eaudioFormat](pplx::task<std::vector<std::string>> task)
+    return SplitMessageAsync(Message).then(
+        [this, AudioFormat](pplx::task<std::vector<std::string>> SplitMessageTask)
         {
-            const auto SplitMessages = task.get();
+            const auto SplitMessages = SplitMessageTask.get();
 
             // Each orion instance has it's own folder for audio files to avoid conflicts. Append the assistant id to the audio folder.
             // Create the audio directory if it doesn't exist
-            std::error_code ec;
-            if (!std::filesystem::exists("audio/" + m_CurrentAssistantID, ec))
+            std::error_code ErrorCode;
+            if (!std::filesystem::exists("audio/" + m_CurrentAssistantID, ErrorCode))
             {
-                std::filesystem::create_directory("audio/" + m_CurrentAssistantID, ec);
-                if (ec)
+                std::filesystem::create_directory("audio/" + m_CurrentAssistantID, ErrorCode);
+                if (ErrorCode)
                 {
                     std::cerr << "Failed to create the audio directory" << std::endl;
                     return;
@@ -491,8 +492,8 @@ pplx::task<void> Orion::SpeakAsync(const std::string& message, const ETTSAudioFo
             // Delete all the audio files in the directory
             for (const auto& Entry : std::filesystem::directory_iterator("audio/" + m_CurrentAssistantID))
             {
-                std::filesystem::remove(Entry.path(), ec);
-                if (ec)
+                std::filesystem::remove(Entry.path(), ErrorCode);
+                if (ErrorCode)
                 {
                     std::cerr << "Failed to delete the audio file" << std::endl;
                     return;
@@ -504,7 +505,7 @@ pplx::task<void> Orion::SpeakAsync(const std::string& message, const ETTSAudioFo
             uint8_t                       Index = 0;
             for (const auto& Message : SplitMessages)
             {
-                Tasks.push_back(SpeakSingleAsync(Message, Index, eaudioFormat));
+                Tasks.push_back(SpeakSingleAsync(Message, Index, AudioFormat));
                 Index++;
             }
 
@@ -514,38 +515,38 @@ pplx::task<void> Orion::SpeakAsync(const std::string& message, const ETTSAudioFo
         });
 }
 
-web::json::value Orion::ListSmartDevices(const std::string& domain)
+web::json::value Orion::ListSmartDevices(const std::string& Domain)
 {
     try
     {
         // Create a new http_client to communicate with the home-assistant api
-        web::http::client::http_client client(U("http://homeassistant.local:8123/api/"));
+        web::http::client::http_client HomeAssistantClient(U("http://homeassistant.local:8123/api/"));
 
         // Create a new http_request to get the smart devices
-        web::http::http_request request(web::http::methods::GET);
-        request.set_request_uri(U("states"));
-        request.headers().add("Authorization", "Bearer " + m_HASSAPIKey);
-        request.headers().add("Content-Type", "application/json");
+        web::http::http_request ListStatesRequest(web::http::methods::GET);
+        ListStatesRequest.set_request_uri(U("states"));
+        ListStatesRequest.headers().add("Authorization", "Bearer " + m_HASSAPIKey);
+        ListStatesRequest.headers().add("Content-Type", "application/json");
 
-        const auto DomainWithDot = domain + ".";
+        const auto DomainWithDot = Domain + ".";
 
         // Send the request and get the response
-        return client.request(request)
+        return HomeAssistantClient.request(ListStatesRequest)
             .then(
-                [DomainWithDot](web::http::http_response response)
+                [DomainWithDot](web::http::http_response ListStatesResponse)
                 {
-                    if (response.status_code() == web::http::status_codes::OK)
+                    if (ListStatesResponse.status_code() == web::http::status_codes::OK)
                     {
-                        return response.extract_json().then(
-                            [DomainWithDot](pplx::task<web::json::value> task)
+                        return ListStatesResponse.extract_json().then(
+                            [DomainWithDot](pplx::task<web::json::value> ExtractJsonTask)
                             {
-                                return task.then(
-                                    [DomainWithDot](web::json::value json)
+                                return ExtractJsonTask.then(
+                                    [DomainWithDot](web::json::value ListStatesResponseDataJson)
                                     {
                                         web::json::value JSmartDevices = web::json::value::array();
-                                        for (const auto& device : json.as_array())
+                                        for (const auto& Device : ListStatesResponseDataJson.as_array())
                                         {
-                                            const auto DeviceName = device.at("entity_id").as_string();
+                                            const auto DeviceName = Device.at("entity_id").as_string();
                                             if (DomainWithDot == "all." || DeviceName.find(DomainWithDot) != std::string::npos)
                                             {
                                                 JSmartDevices[JSmartDevices.size()] = web::json::value::string(DeviceName);
@@ -558,249 +559,251 @@ web::json::value Orion::ListSmartDevices(const std::string& domain)
                     }
                     else
                     {
-                        std::cerr << "Failed to get the smart devices: " << response.to_string() << std::endl;
-                        std::cout << "Failed to get the smart devices: " << response.to_string() << std::endl;
+                        std::cerr << "Failed to get the smart devices: " << ListStatesResponse.to_string() << std::endl;
+                        std::cout << "Failed to get the smart devices: " << ListStatesResponse.to_string() << std::endl;
                         return pplx::task_from_result(web::json::value::array());
                     }
                 })
             .get();
     }
-    catch (const std::exception& e)
+    catch (const std::exception& Exception)
     {
-        std::cerr << "Failed to list the smart devices: " << e.what() << std::endl;
+        std::cerr << "Failed to list the smart devices: " << Exception.what() << std::endl;
         return web::json::value::array();
     }
 }
 
-web::json::value Orion::ExecSmartDeviceService(const web::json::value& devices, const std::string& service)
+web::json::value Orion::ExecSmartDeviceService(const web::json::value& Devices, const std::string& Service)
 {
     try
     {
         // Loop through the devices and execute the service.  The domain is the first part of the entity_id (e.g. light.bedroom_light -> light)
-        for (const auto& device : devices.as_array())
+        for (const auto& Device : Devices.as_array())
         {
-            const auto DeviceName = device.as_string();
+            const auto DeviceName = Device.as_string();
             const auto Domain     = DeviceName.substr(0, DeviceName.find('.'));
             const auto EntityID   = DeviceName.substr(DeviceName.find('.') + 1);
 
             // Create a new http_client to communicate with the home-assistant api
-            web::http::client::http_client client(U("http://homeassistant.local:8123/api/"));
+            web::http::client::http_client HomeAssistantClient(U("http://homeassistant.local:8123/api/"));
 
             // Create a new http_request to execute the smart device service
-            web::http::http_request request(web::http::methods::POST);
-            request.set_request_uri(U("services/" + Domain + "/" + service));
-            request.headers().add("Authorization", "Bearer " + m_HASSAPIKey);
-            request.headers().add("Content-Type", "application/json");
+            web::http::http_request ExecuteServiceRequest(web::http::methods::POST);
+            ExecuteServiceRequest.set_request_uri(U("services/" + Domain + "/" + Service));
+            ExecuteServiceRequest.headers().add("Authorization", "Bearer " + m_HASSAPIKey);
+            ExecuteServiceRequest.headers().add("Content-Type", "application/json");
 
             // Add the body to the request
-            web::json::value body = web::json::value::object();
-            body["entity_id"]     = web::json::value::string(DeviceName);
-            request.set_body(body);
+            web::json::value ExecuteServiceRequestBody = web::json::value::object();
+            ExecuteServiceRequestBody["entity_id"]     = web::json::value::string(DeviceName);
+            ExecuteServiceRequest.set_body(ExecuteServiceRequestBody);
 
             // Send the request and get the response
-            auto response = client.request(request).get();
+            auto ExecuteServiceResponse = HomeAssistantClient.request(ExecuteServiceRequest).get();
 
-            if (response.status_code() != web::http::status_codes::OK)
+            if (ExecuteServiceResponse.status_code() != web::http::status_codes::OK)
             {
                 std::cerr << "Failed to execute the smart device service" << std::endl;
-                std::cout << response.to_string() << std::endl;
+                std::cout << ExecuteServiceResponse.to_string() << std::endl;
             }
             else
             {
-                std::cout << "Executed the smart device service: " << service << " on the device: " << DeviceName << std::endl;
+                std::cout << "Executed the smart device service: " << Service << " on the device: " << DeviceName << std::endl;
             }
         }
 
-        return web::json::value::string("Executed the smart device service: " + service);
+        return web::json::value::string("Executed the smart device service: " + Service);
     }
-    catch (const std::exception& e)
+    catch (const std::exception& Exception)
     {
-        std::cerr << "Failed to execute the smart device service: " << e.what() << std::endl;
-        return web::json::value::string("Failed to execute the smart device service: " + std::string(e.what()));
+        std::cerr << "Failed to execute the smart device service: " << Exception.what() << std::endl;
+        return web::json::value::string("Failed to execute the smart device service: " + std::string(Exception.what()));
     }
 }
 
 pplx::task<web::json::value> Orion::GetChatHistoryAsync()
 {
     // Create a new http_request to get the chat history
-    web::http::http_request request(web::http::methods::GET);
-    request.set_request_uri(U("threads/" + m_CurrentThreadID + "/messages"));
-    request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    request.headers().add("OpenAI-Beta", "assistants=v1");
+    web::http::http_request ListMessagesRequest(web::http::methods::GET);
+    ListMessagesRequest.set_request_uri(U("threads/" + m_CurrentThreadID + "/messages"));
+    ListMessagesRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+    ListMessagesRequest.headers().add("OpenAI-Beta", "assistants=v1");
 
     // Check if the query parameter is present
-    bool bMarkdown = request.request_uri().query().find(U("markdown=true")) != std::string::npos;
+    bool IsMarkdownRequested = ListMessagesRequest.request_uri().query().find(U("markdown=true")) != std::string::npos;
 
     // Send the request and get the response
-    return m_OpenAIClient->request(request).then(
-        [=](web::http::http_response response)
-        {
-            if (response.status_code() == web::http::status_codes::OK)
+    return m_OpenAIClient->request(ListMessagesRequest)
+        .then(
+            [=](web::http::http_response ListMessagesResponse)
             {
-                return response.extract_json()
-                    .then([=](pplx::task<web::json::value> task) { return task.get(); })
-                    .then(
-                        [=](web::json::value json)
-                        {
-                            auto JData = json.at("data").as_array();
-
-                            auto JChatHistory = web::json::value::object();
-                            for (const auto& Message : JData)
+                if (ListMessagesResponse.status_code() == web::http::status_codes::OK)
+                {
+                    return ListMessagesResponse.extract_json()
+                        .then([=](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+                        .then(
+                            [=](web::json::value ListMessagesResponseDataJson)
                             {
-                                // Our assistant is always the orion role in the chat history
-                                auto Role = Message.at("role").as_string();
-                                Role      = Role == "assistant" ? "orion" : Role;
+                                auto JData = ListMessagesResponseDataJson.at("data").as_array();
 
-                                for (const auto& Content : Message.at("content").as_array())
+                                auto JChatHistory = web::json::value::object();
+                                for (const auto& Message : JData)
                                 {
-                                    if (Content.at("type").as_string() == "text")
+                                    // Our assistant is always the orion role in the chat history
+                                    auto Role = Message.at("role").as_string();
+                                    Role      = Role == "assistant" ? "orion" : Role;
+
+                                    for (const auto& Content : Message.at("content").as_array())
                                     {
-                                        // Add the message to the chat history
-                                        auto Message = Content.at("text").at("value").as_string();
-
-                                        if (bMarkdown)
+                                        if (Content.at("type").as_string() == "text")
                                         {
-                                            auto szMarkdown = cmark_markdown_to_html(Message.c_str(), Message.length(), CMARK_OPT_DEFAULT);
-                                            Message         = szMarkdown;
-                                            free(szMarkdown);
+                                            // Add the message to the chat history
+                                            auto Message = Content.at("text").at("value").as_string();
+
+                                            if (IsMarkdownRequested)
+                                            {
+                                                auto pMarkdown = cmark_markdown_to_html(Message.c_str(), Message.length(), CMARK_OPT_DEFAULT);
+                                                Message        = pMarkdown;
+                                                free(pMarkdown);
+                                            }
+
+                                            auto JMessage       = web::json::value::object();
+                                            JMessage["message"] = web::json::value::string(Message);
+                                            JMessage["role"]    = web::json::value::string("orion");
+
+                                            // Add the message to the chat history
+                                            JChatHistory[JChatHistory.size()] = JMessage;
                                         }
-
-                                        auto JMessage       = web::json::value::object();
-                                        JMessage["message"] = web::json::value::string(Message);
-                                        JMessage["role"]    = web::json::value::string("orion");
-
-                                        // Add the message to the chat history
-                                        JChatHistory[JChatHistory.size()] = JMessage;
                                     }
                                 }
-                            }
 
-                            return JChatHistory;
-                        });
-            }
-            else
-            {
-                std::cerr << "Failed to get the chat history" << std::endl;
-                std::cout << response.to_string() << std::endl;
+                                return JChatHistory;
+                            });
+                }
+                else
+                {
+                    std::cerr << "Failed to get the chat history" << std::endl;
+                    std::cout << ListMessagesResponse.to_string() << std::endl;
 
-                return pplx::task_from_result(web::json::value::object());
-            }
-        });
+                    return pplx::task_from_result(web::json::value::object());
+                }
+            });
 }
 
-pplx::task<void> Orion::SpeakSingleAsync(const std::string& message, const uint8_t index, const ETTSAudioFormat eaudioFormat)
+pplx::task<void> Orion::SpeakSingleAsync(const std::string& Message, const uint8_t Index, const ETTSAudioFormat AudioFormat)
 {
     // Create a new http_request to get the speech
-    web::http::http_request request(web::http::methods::POST);
-    request.set_request_uri(U("audio/speech"));
-    request.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    request.headers().add("Content-Type", "application/json");
+    web::http::http_request TextToSpeechRequest(web::http::methods::POST);
+    TextToSpeechRequest.set_request_uri(U("audio/speech"));
+    TextToSpeechRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+    TextToSpeechRequest.headers().add("Content-Type", "application/json");
 
     // Add the body to the request
-    web::json::value body = web::json::value::object();
-    body["model"]         = web::json::value::string("tts-1");
-    body["input"]         = web::json::value::string(message);
+    web::json::value TextToSpeechRequestBody = web::json::value::object();
+    TextToSpeechRequestBody["model"]         = web::json::value::string("tts-1");
+    TextToSpeechRequestBody["input"]         = web::json::value::string(Message);
 
     // Default to mp3
-    body["response_format"] = web::json::value::string("mp3");
-    std::string MimeType    = "audio/mpeg";
+    TextToSpeechRequestBody["response_format"] = web::json::value::string("mp3");
+    std::string MimeType                       = "audio/mpeg";
 
-    if (eaudioFormat == ETTSAudioFormat::Opus)
+    if (AudioFormat == ETTSAudioFormat::Opus)
     {
-        MimeType                = "audio/ogg";
-        body["response_format"] = web::json::value::string("opus");
+        MimeType                                   = "audio/ogg";
+        TextToSpeechRequestBody["response_format"] = web::json::value::string("opus");
     }
-    else if (eaudioFormat == ETTSAudioFormat::AAC)
+    else if (AudioFormat == ETTSAudioFormat::AAC)
     {
-        MimeType                = "audio/aac";
-        body["response_format"] = web::json::value::string("aac");
+        MimeType                                   = "audio/aac";
+        TextToSpeechRequestBody["response_format"] = web::json::value::string("aac");
     }
-    else if (eaudioFormat == ETTSAudioFormat::Flac)
+    else if (AudioFormat == ETTSAudioFormat::FLAC)
     {
-        MimeType                = "audio/flac";
-        body["response_format"] = web::json::value::string("flac");
+        MimeType                                   = "audio/flac";
+        TextToSpeechRequestBody["response_format"] = web::json::value::string("flac");
     }
-    else if (eaudioFormat == ETTSAudioFormat::Wav)
+    else if (AudioFormat == ETTSAudioFormat::Wav)
     {
-        MimeType                = "audio/wav";
-        body["response_format"] = web::json::value::string("wav");
+        MimeType                                   = "audio/wav";
+        TextToSpeechRequestBody["response_format"] = web::json::value::string("wav");
     }
-    else if (eaudioFormat == ETTSAudioFormat::PCM)
+    else if (AudioFormat == ETTSAudioFormat::PCM)
     {
-        MimeType                = "audio/wav";
-        body["response_format"] = web::json::value::string("pcm");
+        MimeType                                   = "audio/wav";
+        TextToSpeechRequestBody["response_format"] = web::json::value::string("pcm");
     }
 
     // Set the voice based on the current voice
     if (m_CurrentVoice == EOrionVoice::Alloy)
     {
-        body["voice"] = web::json::value::string("alloy");
+        TextToSpeechRequestBody["voice"] = web::json::value::string("alloy");
     }
     else if (m_CurrentVoice == EOrionVoice::Echo)
     {
-        body["voice"] = web::json::value::string("echo");
+        TextToSpeechRequestBody["voice"] = web::json::value::string("echo");
     }
     else if (m_CurrentVoice == EOrionVoice::Fable)
     {
-        body["voice"] = web::json::value::string("fable");
+        TextToSpeechRequestBody["voice"] = web::json::value::string("fable");
     }
     else if (m_CurrentVoice == EOrionVoice::Nova)
     {
-        body["voice"] = web::json::value::string("nova");
+        TextToSpeechRequestBody["voice"] = web::json::value::string("nova");
     }
     else if (m_CurrentVoice == EOrionVoice::Onyx)
     {
-        body["voice"] = web::json::value::string("onyx");
+        TextToSpeechRequestBody["voice"] = web::json::value::string("onyx");
     }
     else if (m_CurrentVoice == EOrionVoice::Shimmer)
     {
-        body["voice"] = web::json::value::string("shimmer");
+        TextToSpeechRequestBody["voice"] = web::json::value::string("shimmer");
     }
 
-    const auto Extension = "." + body["response_format"].as_string();
+    const auto Extension = "." + TextToSpeechRequestBody["response_format"].as_string();
 
-    request.set_body(body);
+    TextToSpeechRequest.set_body(TextToSpeechRequestBody);
 
     // Generate audio file name from index
-    std::string FileName = "audio/" + m_CurrentAssistantID + "/speech_" + std::to_string(index) + Extension;
+    std::string FileName = "audio/" + m_CurrentAssistantID + "/speech_" + std::to_string(Index) + Extension;
 
     // Send the request and get the response
-    return m_OpenAIClient->request(request).then(
-        [FileName, MimeType](web::http::http_response response)
-        {
-            if (response.status_code() == web::http::status_codes::OK)
+    return m_OpenAIClient->request(TextToSpeechRequest)
+        .then(
+            [FileName, MimeType](web::http::http_response TextToSpeechResponse)
             {
-                // Stream the response to a file using concurrency::streams::fstream to avoid loading the entire response into memory
-                // Then return the filename once the file has started streaming
+                if (TextToSpeechResponse.status_code() == web::http::status_codes::OK)
+                {
+                    // Stream the response to a file using concurrency::streams::fstream to avoid loading the entire response into memory
+                    // Then return the filename once the file has started streaming
 
-                // Create a file stream
-                return concurrency::streams::fstream::open_ostream(FileName).then(
-                    [response, FileName, MimeType](concurrency::streams::ostream fileStream)
-                    {
-                        // Stream the response to the file
-                        response.body().read_to_end(fileStream.streambuf()).wait();
+                    // Create a file stream
+                    return concurrency::streams::fstream::open_ostream(FileName).then(
+                        [TextToSpeechResponse, FileName, MimeType](concurrency::streams::ostream AudioFileStream)
+                        {
+                            // Stream the response to the file
+                            TextToSpeechResponse.body().read_to_end(AudioFileStream.streambuf()).wait();
 
-                        return pplx::task_from_result();
-                    });
-            }
-            else
-            {
-                std::cerr << "Failed to get the speech" << std::endl;
-                std::cout << response.to_string() << std::endl;
-            }
+                            return pplx::task_from_result();
+                        });
+                }
+                else
+                {
+                    std::cerr << "Failed to get the speech" << std::endl;
+                    std::cout << TextToSpeechResponse.to_string() << std::endl;
+                }
 
-            return pplx::task_from_result();
-        });
+                return pplx::task_from_result();
+            });
 }
 
-pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string& message)
+pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string& Message)
 {
-    // Split the message into multiple messages if it's too long (512). But only on periods or newlines.
-    // This is to avoid splitting words in half. A message can be longer than 512 characters if it contains no periods or newlines.
+    // Split the message into multiple messages if it's too long. But only on periods or newlines.
+    // This is to avoid splitting words in half. A message can be longer than x amount of characters if it contains no periods or newlines.
     // It must NOT be plit mid-word or mid-sentence.
 
     return pplx::create_task(
-        [message]
+        [Message]
         {
             std::vector<std::string> Messages;
             constexpr char           NewLineChar        = '\n';
@@ -813,14 +816,14 @@ pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string&
             size_t LastSplitIndex = std::string::npos; // Initialize to indicate no split index found yet
             size_t Index          = 0;                 // Current index in the message
 
-            while (Index < message.length())
+            while (Index < Message.length())
             {
-                bool bReachedHardLimit = false;
+                bool DidReachHardLimit = false;
 
                 // Look for next split point or end of message
-                while (Index < message.length() && !bReachedHardLimit)
+                while (Index < Message.length() && !DidReachHardLimit)
                 {
-                    if (message[Index] == PeriodChar || message[Index] == NewLineChar)
+                    if (Message[Index] == PeriodChar || Message[Index] == NewLineChar)
                     {
                         LastSplitIndex = Index;
                     }
@@ -831,11 +834,11 @@ pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string&
                          (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DistanceThreshold)) ||
                         Index - MessageStart >= MaxLengthHardLimit)
                     {
-                        bReachedHardLimit = true; // Force split if hard limit reached
+                        DidReachHardLimit = true; // Force split if hard limit reached
                         // Adjust SplitIndex to last known good split if within threshold, otherwise split at current index
                         size_t SplitIndex =
                             (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DistanceThreshold) ? LastSplitIndex : Index - 1;
-                        Messages.push_back(message.substr(MessageStart, SplitIndex - MessageStart + 1));
+                        Messages.push_back(Message.substr(MessageStart, SplitIndex - MessageStart + 1));
                         MessageStart   = SplitIndex + 1;
                         Index          = MessageStart;
                         LastSplitIndex = std::string::npos; // Reset last split index
@@ -844,9 +847,9 @@ pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string&
             }
 
             // Handle any remaining part of the message
-            if (MessageStart < message.length())
+            if (MessageStart < Message.length())
             {
-                Messages.push_back(message.substr(MessageStart));
+                Messages.push_back(Message.substr(MessageStart));
             }
 
             return Messages;

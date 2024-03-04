@@ -8,6 +8,12 @@ project(ORION VERSION 1.0 DESCRIPTION "Operational Reasoning and Intelligence Op
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+set(CMAKE_CXX_CLANG_TIDY
+  clang-tidy;
+  -format-style='file';
+  -header-filter=${CMAKE_CURRENT_SOURCE_DIR};
+)
+
 # Include directory for header files
 include_directories(include)
 

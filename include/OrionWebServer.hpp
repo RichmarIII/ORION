@@ -18,8 +18,8 @@ namespace ORION
         virtual ~OrionWebServer() = default;
 
         /// @brief  Start the web server
-        /// @param  port The port to listen on
-        void Start(int port);
+        /// @param  Port The port to listen on
+        void Start(int Port);
 
         /// @brief  Stop the web server
         void Stop();
@@ -29,73 +29,73 @@ namespace ORION
 
     protected:
         /// @brief  Dispatches a request to the appropriate handler based on the request method and path
-        /// @param  request The HTTP request
-        void HandleRequest(web::http::http_request request);
+        /// @param  Request The HTTP request
+        void HandleRequest(web::http::http_request Request);
 
         /// @brief  The /send_message endpoint is used to send a message to Orion. optionally converting it to markdown via the ?markdown=true query
         /// parameter
-        /// @param  request The HTTP request
+        /// @param  Request The HTTP request
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/send_message
         /// @example Response: "Hello, user!"
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/send_message?markdown=true
         /// @example Response: "<p>Hello, user!</p>"
-        void HandleSendMessageEndpoint(web::http::http_request request);
+        void HandleSendMessageEndpoint(web::http::http_request Request);
 
         /// @brief  The / endpoint is used to serve the Orion web interface
-        /// @param  request The HTTP request
+        /// @param  Request The HTTP request
         /// @example curl -X GET http://localhost:8080/
         /// @example Response: The contents of the index.html file
-        void HandleRootEndpoint(web::http::http_request request);
+        void HandleRootEndpoint(web::http::http_request Request);
 
         /// @brief  The /<file> endpoint is used to serve static files.
         ///         This is a catch-all endpoint that will serve any file in the static directory.
-        /// @param  request The HTTP request
+        /// @param  Request The HTTP request
         /// @example curl -X GET http://localhost:8080/image.png
         /// @example Response: The contents of the image.png file served from the static directory
-        void HandleStaticFileEndpoint(web::http::http_request request);
+        void HandleStaticFileEndpoint(web::http::http_request Request);
 
         /// @brief  The /audio/<file> endpoint is used to serve audio files.
         ///         This is a catch-all endpoint that will serve any file in the audio directory.
-        /// @param  request The HTTP request
+        /// @param  Request The HTTP request
         /// @example curl -X GET http://localhost:8080/audio/audio1.mp3
         /// @example Response: The contents of the audio1.mp3 file served from the audio directory
-        void HandleAudioFileEndpoint(web::http::http_request request);
+        void HandleAudioFileEndpoint(web::http::http_request Request);
 
         /// @brief  The /markdown endpoint is used to convert a message to markdown
-        /// @param  request The HTTP request
+        /// @param  Request The HTTP request
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/markdown
         /// @example Response: "<p>Hello, Orion!"</p>
-        void HandleMarkdownEndpoint(web::http::http_request request);
+        void HandleMarkdownEndpoint(web::http::http_request Request);
 
         /// @brief  The /chat_history endpoint is used to retrieve the chat history.
         /// Optionally converting it to markdown via the ?markdown=true query parameter
-        /// @param  request The HTTP request
+        /// @param  Request The HTTP request
         /// @example curl -X GET http://localhost:8080/chat_history
         /// @example Response: [{ "role": "user", "message": "Hello, Orion!" }, { "role": "orion", "message": "Hello, user!" }]
         /// @example curl -X GET http://localhost:8080/chat_history?markdown=true
         /// @example Response: [{ "role": "user", "message": "<p>Hello, Orion!</p>" }, { "role": "orion", "message": "<p>Hello, user!</p>" }]
-        void HandleChatHistoryEndpoint(web::http::http_request request);
+        void HandleChatHistoryEndpoint(web::http::http_request Request);
 
         /// @brief  The /speak endpoint is used to make Orion speak a message.
         /// Supported audio formats: mp3, opus, aac, flac, wav, and pcm
         /// Audio is segmented into multiple files if the message is too long.
-        /// @param  request The HTTP request
+        /// @param  Request The HTTP request
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak?format=opus
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak?format=wav
         /// @note   The audio files are stored in the audio/{orion_id} directory
-        void HandleSpeakEndpoint(web::http::http_request request);
+        void HandleSpeakEndpoint(web::http::http_request Request);
 
         /// @brief  The /create_orion endpoint is used to create an Orion instance.
         /// The Orion instance is returned as a JSON object with an id property. This id must be used in the X-Orion-Id header for all requests.
         /// If you want to retrieve an existing Orion instance, you can send the id as a query parameter.
-        /// @param  request The HTTP request
+        /// @param  Request The HTTP request
         /// @example curl -X POST http://localhost:8080/create_orion
         /// @example Response: { "id": "1234" }
         /// @example curl -X POST http://localhost:8080/create_orion?id=1234
         /// @example Response: { "id": "1234" }
         /// @note   The Orion instance id should be stored and used in the X-Orion-Id header for all requests.
-        void HandleCreateOrionEndpoint(web::http::http_request request);
+        void HandleCreateOrionEndpoint(web::http::http_request Request);
 
         /// @brief  The orion instances that were created this session
         std::vector<std::unique_ptr<Orion>> m_OrionInstances;
@@ -104,7 +104,7 @@ namespace ORION
         web::http::experimental::listener::http_listener m_Listener;
 
         /// @brief  Whether the web server is running
-        std::atomic<bool> m_bRunning = false;
+        std::atomic<bool> m_IsRunning = false;
 
         /// @brief  The condition variable for the web server. Signaled when the web server is stopped
         std::condition_variable m_ConditionVariable;

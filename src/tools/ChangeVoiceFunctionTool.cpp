@@ -3,51 +3,51 @@
 
 using namespace ORION;
 
-std::string ChangeVoiceFunctionTool::Execute(Orion& orion, const web::json::value& parameters)
+std::string ChangeVoiceFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {
         // Wants to change the voice
-        std::string voice = parameters.at("voice").as_string();
-        if (voice == "alloy")
+        std::string Voice = Parameters.at("voice").as_string();
+        if (Voice == "alloy")
         {
-            orion.SetNewVoice(EOrionVoice::Alloy);
+            Orion.SetNewVoice(EOrionVoice::Alloy);
             return std::string(R"({"message": "Changed voice to alloy"})");
         }
-        else if (voice == "echo")
+        else if (Voice == "echo")
         {
-            orion.SetNewVoice(EOrionVoice::Echo);
+            Orion.SetNewVoice(EOrionVoice::Echo);
             return std::string(R"({"message": "Changed voice to echo"})");
         }
-        else if (voice == "fable")
+        else if (Voice == "fable")
         {
-            orion.SetNewVoice(EOrionVoice::Fable);
+            Orion.SetNewVoice(EOrionVoice::Fable);
             return std::string(R"({"message": "Changed voice to fable"})");
         }
-        else if (voice == "nova")
+        else if (Voice == "nova")
         {
-            orion.SetNewVoice(EOrionVoice::Nova);
+            Orion.SetNewVoice(EOrionVoice::Nova);
             return std::string(R"({"message": "Changed voice to nova"})");
         }
-        else if (voice == "onyx")
+        else if (Voice == "onyx")
         {
-            orion.SetNewVoice(EOrionVoice::Onyx);
+            Orion.SetNewVoice(EOrionVoice::Onyx);
             return std::string(R"({"message": "Changed voice to onyx"})");
         }
-        else if (voice == "shimmer")
+        else if (Voice == "shimmer")
         {
-            orion.SetNewVoice(EOrionVoice::Shimmer);
+            Orion.SetNewVoice(EOrionVoice::Shimmer);
             return std::string(R"({"message": "Changed voice to shimmer"})");
         }
         else
         {
-            std::cerr << "Unknown voice: " << voice << std::endl;
+            std::cerr << "Unknown voice: " << Voice << std::endl;
             return std::string(R"({"message": "Unknown voice"})");
         }
     }
-    catch (const std::exception& e)
+    catch (const std::exception& Exception)
     {
-        std::cerr << "Failed to change the voice: " << e.what() << std::endl;
-        return std::string(R"({"message": "Failed to change the voice: )") + e.what() + R"("})";
+        std::cerr << "Failed to change the voice: " << Exception.what() << std::endl;
+        return std::string(R"({"message": "Failed to change the voice: )") + Exception.what() + R"("})";
     }
 }
