@@ -17,6 +17,32 @@ set(CMAKE_CXX_CLANG_TIDY
 # Include directory for header files
 include_directories(include)
 
+# List all the asset files to watch for changes. changing any of these files will trigger the post-build copy assets command
+# which will copy all the assets to the executable directory
+set(ASSETS
+    ${CMAKE_SOURCE_DIR}/templates/index.html
+    ${CMAKE_SOURCE_DIR}/static/script.js
+    ${CMAKE_SOURCE_DIR}/static/styles.css
+    ${CMAKE_SOURCE_DIR}/static/paperclip-plus.svg
+    ${CMAKE_SOURCE_DIR}/.openai_api_key.txt
+    ${CMAKE_SOURCE_DIR}/.openweather_api_key.txt
+    ${CMAKE_SOURCE_DIR}/.hass_api_key.txt
+)
+
+# The generated .cpp file to trigger post-build copy assets command.
+# A build (and therefore a post-build) is triggered only when source files change, not when assets change.
+# This is a workaround to trigger a post-build command when assets change.
+set(ASSETS_CPP_FILE "${CMAKE_SOURCE_DIR}/src/generated/Assets.cpp")
+
+# This command generates an empty .cpp file when any of the assets change (DEPENDS ${ASSETS}).
+# And because a .cpp file is changed, a post-build command is triggered.
+add_custom_command(
+    OUTPUT ${ASSETS_CPP_FILE}
+    COMMAND ${CMAKE_COMMAND} -E touch ${ASSETS_CPP_FILE}
+    DEPENDS ${ASSETS}
+    COMMENT "Assets changed: Generating an empty .cpp file to trigger post-build copy assets command..."
+)
+
 # Explicitly list your source files
 set(SOURCES
     src/main.cpp
@@ -30,7 +56,8 @@ set(SOURCES
     src/tools/ChangeIntelligenceFunctionTool.cpp
     src/tools/ListSmartDevicesFunctionTool.cpp
     src/tools/ExecSmartDeviceServiceFunctionTool.cpp
-    # Add all source files here
+
+    ${ASSETS_CPP_FILE} # This is the generated .cpp file to trigger post-build copy assets command
 )
 
 # Define the executable based on the explicitly listed source files
@@ -41,7 +68,6 @@ find_package(cpprestsdk CONFIG REQUIRED)
 find_package(cmark CONFIG REQUIRED)
 
 target_link_libraries(ORION PRIVATE cpprestsdk::cpprest cpprestsdk::cpprestsdk_zlib_internal cpprestsdk::cpprestsdk_boost_internal cpprestsdk::cpprestsdk_openssl_internal cmark::cmark_static)
-
 
 # Copy the files to the executable directory recursively
 add_custom_command(TARGET ORION POST_BUILD
@@ -64,4 +90,6 @@ add_custom_command(TARGET ORION POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_SOURCE_DIR}/static
     $<TARGET_FILE_DIR:ORION>/static
+
+    COMMENT "Copying asset files to the executable directory..."
 )
