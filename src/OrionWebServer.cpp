@@ -117,22 +117,22 @@ void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
     }
 
     // Check if markdown is requested
-    const bool IsMarkdownRequested = Request.request_uri().query().find(U("markdown=true")) != std::string::npos;
+    const bool IS_MARKDOWN_REQUESTED = Request.request_uri().query().find(U("markdown=true")) != std::string::npos;
 
     // Get the message from the request body
     Request.extract_string()
         .then([](pplx::task<std::string> ExtractJsonTask) { return ExtractJsonTask.get(); })
         .then(
-            [OrionIt, IsMarkdownRequested, Request](std::string RequestMessage)
+            [OrionIt, IS_MARKDOWN_REQUESTED, Request](std::string RequestMessage)
             {
                 (*OrionIt)
                     ->SendMessageAsync(RequestMessage)
                     .then([](pplx::task<std::string> SendMessageTask) { return SendMessageTask.get(); })
                     .then(
-                        [IsMarkdownRequested, Request](std::string SendMessageResponse)
+                        [IS_MARKDOWN_REQUESTED, Request](std::string SendMessageResponse)
                         {
                             // Convert the message to markdown if requested
-                            if (IsMarkdownRequested)
+                            if (IS_MARKDOWN_REQUESTED)
                             {
                                 auto pMarkdown = cmark_markdown_to_html(SendMessageResponse.c_str(), SendMessageResponse.length(), CMARK_OPT_UNSAFE);
                                 SendMessageResponse = pMarkdown;
@@ -171,49 +171,49 @@ void OrionWebServer::HandleStaticFileEndpoint(web::http::http_request Request)
     FileName = FileName.substr(1);
 
     // Get the file extension
-    const auto LastDotIndex = FileName.find_last_of('.');
-    if (LastDotIndex == std::string::npos)
+    const auto LAST_DOT_INDEX = FileName.find_last_of('.');
+    if (LAST_DOT_INDEX == std::string::npos)
     {
         Request.reply(web::http::status_codes::BadRequest, U("No file extension was found."));
         return;
     }
 
     // Get the file extension
-    const auto Extension = FileName.substr(LastDotIndex);
+    const auto EXTENSION = FileName.substr(LAST_DOT_INDEX);
 
     // Calculate the content type
     utility::string_t ContentType;
-    if (Extension == U(".html"))
+    if (EXTENSION == U(".html"))
         ContentType = U("text/html");
-    else if (Extension == U(".css"))
+    else if (EXTENSION == U(".css"))
         ContentType = U("text/css");
-    else if (Extension == U(".js"))
+    else if (EXTENSION == U(".js"))
         ContentType = U("application/javascript");
-    else if (Extension == U(".png"))
+    else if (EXTENSION == U(".png"))
         ContentType = U("image/png");
-    else if (Extension == U(".jpg") || Extension == U(".jpeg"))
+    else if (EXTENSION == U(".jpg") || EXTENSION == U(".jpeg"))
         ContentType = U("image/jpeg");
-    else if (Extension == U(".gif"))
+    else if (EXTENSION == U(".gif"))
         ContentType = U("image/gif");
-    else if (Extension == U(".svg"))
+    else if (EXTENSION == U(".svg"))
         ContentType = U("image/svg+xml");
-    else if (Extension == U(".ico"))
+    else if (EXTENSION == U(".ico"))
         ContentType = U("image/x-icon");
-    else if (Extension == U(".mp4"))
+    else if (EXTENSION == U(".mp4"))
         ContentType = U("video/mp4");
-    else if (Extension == U(".webm"))
+    else if (EXTENSION == U(".webm"))
         ContentType = U("video/webm");
-    else if (Extension == U(".mp3"))
+    else if (EXTENSION == U(".mp3"))
         ContentType = U("audio/mpeg");
-    else if (Extension == U(".wav"))
+    else if (EXTENSION == U(".wav"))
         ContentType = U("audio/wav");
-    else if (Extension == U(".ogg"))
+    else if (EXTENSION == U(".ogg"))
         ContentType = U("audio/ogg");
-    else if (Extension == U(".opus"))
+    else if (EXTENSION == U(".opus"))
         ContentType = U("audio/ogg");
-    else if (Extension == U(".flac"))
+    else if (EXTENSION == U(".flac"))
         ContentType = U("audio/flac");
-    else if (Extension == U(".aac"))
+    else if (EXTENSION == U(".aac"))
         ContentType = U("audio/aac");
     else
         ContentType = U("application/octet-stream"); // Default to binary stream for unknown file types
