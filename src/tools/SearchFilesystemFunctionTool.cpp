@@ -5,7 +5,7 @@
 
 using namespace ORION;
 
-std::string SearchFilesystemFunctionTool::Execute(Orion& orion, const web::json::value& parameters)
+std::string SearchFilesystemFunctionTool::Execute(Orion& Orion, const web::json::value& PARAMETERS)
 {
     try
     {
@@ -13,10 +13,10 @@ std::string SearchFilesystemFunctionTool::Execute(Orion& orion, const web::json:
         std::filesystem::path SearchDirectory = std::filesystem::path(std::getenv("HOME"));
 
         // Check if the parameters contain a directory
-        if (parameters.has_field("search_directory"))
+        if (PARAMETERS.has_field("search_directory"))
         {
             // Set the search directory to the directory in the parameters
-            SearchDirectory = parameters.at("search_directory").as_string();
+            SearchDirectory = PARAMETERS.at("search_directory").as_string();
         }
 
         // Check if directory exists
@@ -27,15 +27,15 @@ std::string SearchFilesystemFunctionTool::Execute(Orion& orion, const web::json:
         }
 
         bool Recursive = false;
-        if (parameters.has_field("recursive"))
+        if (PARAMETERS.has_field("recursive"))
         {
-            Recursive = parameters.at("recursive").as_bool();
+            Recursive = PARAMETERS.at("recursive").as_bool();
         }
 
-        if (parameters.has_field("file_name"))
+        if (PARAMETERS.has_field("file_name"))
         {
             // Get the file name from the parameters
-            std::string FileName = parameters.at("file_name").as_string();
+            std::string FileName = PARAMETERS.at("file_name").as_string();
 
             std::vector<std::string> FileMatches;
 
@@ -78,13 +78,13 @@ std::string SearchFilesystemFunctionTool::Execute(Orion& orion, const web::json:
                 return std::string(R"({"message": "No files found"})");
             }
 
-            web::json::value json = web::json::value::array(FileMatches.size());
-            for (size_t i = 0; i < FileMatches.size(); i++)
+            web::json::value FileMatchesJson = web::json::value::array(FileMatches.size());
+            for (size_t I = 0; I < FileMatches.size(); I++)
             {
-                json[i] = web::json::value::string(FileMatches[i]);
+                FileMatchesJson[I] = web::json::value::string(FileMatches[I]);
             }
 
-            return json.serialize();
+            return FileMatchesJson.serialize();
         }
         else
         {
@@ -92,9 +92,9 @@ std::string SearchFilesystemFunctionTool::Execute(Orion& orion, const web::json:
             return std::string(R"({"message": "No file name provided"})");
         }
     }
-    catch (const std::exception& e)
+    catch (const std::exception& Exception)
     {
-        std::cerr << e.what() << '\n';
-        return std::string(R"({"message": "Failed to search the filesystem: )") + e.what() + R"("})";
+        std::cerr << Exception.what() << '\n';
+        return std::string(R"({"message": "Failed to search the filesystem: )") + Exception.what() + R"("})";
     }
 }

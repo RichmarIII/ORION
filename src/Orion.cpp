@@ -20,11 +20,11 @@
 
 using namespace ORION;
 
-Orion::Orion(const std::string& ID, std::vector<std::unique_ptr<IOrionTool>>&& Tools, const EOrionIntelligence Intelligence, const EOrionVoice Voice,
+Orion::Orion(const std::string& ID, std::vector<std::unique_ptr<IOrionTool>>&& Tools, const EOrionIntelligence INTELLIGENCE, const EOrionVoice VOICE,
              const char* pName, const char* pInstructions, const char* pDescription)
     : m_Tools(std::move(Tools)),
-      m_CurrentIntelligence(Intelligence),
-      m_CurrentVoice(Voice),
+      m_CurrentIntelligence(INTELLIGENCE),
+      m_CurrentVoice(VOICE),
       m_Name(pName),
       m_Instructions(pInstructions),
       m_Description(pDescription)
@@ -458,23 +458,23 @@ void Orion::CreateClient()
     }
 }
 
-void Orion::SetNewVoice(const EOrionVoice Voice)
+void Orion::SetNewVoice(const EOrionVoice VOICE)
 {
-    m_CurrentVoice = Voice;
+    m_CurrentVoice = VOICE;
 }
 
-void Orion::SetNewIntelligence(const EOrionIntelligence Intelligence)
+void Orion::SetNewIntelligence(const EOrionIntelligence INTELLIGENCE)
 {
-    m_CurrentIntelligence = Intelligence;
+    m_CurrentIntelligence = INTELLIGENCE;
 }
 
-pplx::task<void> Orion::SpeakAsync(const std::string& Message, const ETTSAudioFormat AudioFormat)
+pplx::task<void> Orion::SpeakAsync(const std::string& Message, const ETTSAudioFormat AUDIO_FORMAT)
 {
     // Split the message into multiple messages if it's too long
     return SplitMessageAsync(Message).then(
-        [this, AudioFormat](pplx::task<std::vector<std::string>> SplitMessageTask)
+        [this, AUDIO_FORMAT](pplx::task<std::vector<std::string>> SplitMessageTask)
         {
-            const auto SplitMessages = SplitMessageTask.get();
+            const auto SPLIT_MESSAGES = SplitMessageTask.get();
 
             // Each orion instance has it's own folder for audio files to avoid conflicts. Append the assistant id to the audio folder.
             // Create the audio directory if it doesn't exist
@@ -503,9 +503,9 @@ pplx::task<void> Orion::SpeakAsync(const std::string& Message, const ETTSAudioFo
             // Create a task for each message
             std::vector<pplx::task<void>> Tasks;
             uint8_t                       Index = 0;
-            for (const auto& Message : SplitMessages)
+            for (const auto& Message : SPLIT_MESSAGES)
             {
-                Tasks.push_back(SpeakSingleAsync(Message, Index, AudioFormat));
+                Tasks.push_back(SpeakSingleAsync(Message, Index, AUDIO_FORMAT));
                 Index++;
             }
 
@@ -528,28 +528,28 @@ web::json::value Orion::ListSmartDevices(const std::string& Domain)
         ListStatesRequest.headers().add("Authorization", "Bearer " + m_HASSAPIKey);
         ListStatesRequest.headers().add("Content-Type", "application/json");
 
-        const auto DomainWithDot = Domain + ".";
+        const auto DOMAIN_WITH_DOT = Domain + ".";
 
         // Send the request and get the response
         return HomeAssistantClient.request(ListStatesRequest)
             .then(
-                [DomainWithDot](web::http::http_response ListStatesResponse)
+                [DOMAIN_WITH_DOT](web::http::http_response ListStatesResponse)
                 {
                     if (ListStatesResponse.status_code() == web::http::status_codes::OK)
                     {
                         return ListStatesResponse.extract_json().then(
-                            [DomainWithDot](pplx::task<web::json::value> ExtractJsonTask)
+                            [DOMAIN_WITH_DOT](pplx::task<web::json::value> ExtractJsonTask)
                             {
                                 return ExtractJsonTask.then(
-                                    [DomainWithDot](web::json::value ListStatesResponseDataJson)
+                                    [DOMAIN_WITH_DOT](web::json::value ListStatesResponseDataJson)
                                     {
                                         web::json::value JSmartDevices = web::json::value::array();
                                         for (const auto& Device : ListStatesResponseDataJson.as_array())
                                         {
-                                            const auto DeviceName = Device.at("entity_id").as_string();
-                                            if (DomainWithDot == "all." || DeviceName.find(DomainWithDot) != std::string::npos)
+                                            const auto DEVICE_NAME = Device.at("entity_id").as_string();
+                                            if (DOMAIN_WITH_DOT == "all." || DEVICE_NAME.find(DOMAIN_WITH_DOT) != std::string::npos)
                                             {
-                                                JSmartDevices[JSmartDevices.size()] = web::json::value::string(DeviceName);
+                                                JSmartDevices[JSmartDevices.size()] = web::json::value::string(DEVICE_NAME);
                                             }
                                         }
 
@@ -580,22 +580,22 @@ web::json::value Orion::ExecSmartDeviceService(const web::json::value& Devices, 
         // Loop through the devices and execute the service.  The domain is the first part of the entity_id (e.g. light.bedroom_light -> light)
         for (const auto& Device : Devices.as_array())
         {
-            const auto DeviceName = Device.as_string();
-            const auto Domain     = DeviceName.substr(0, DeviceName.find('.'));
-            const auto EntityID   = DeviceName.substr(DeviceName.find('.') + 1);
+            const auto DEVICE_NAME = Device.as_string();
+            const auto DOMAIN      = DEVICE_NAME.substr(0, DEVICE_NAME.find('.'));
+            const auto ENTITY_ID   = DEVICE_NAME.substr(DEVICE_NAME.find('.') + 1);
 
             // Create a new http_client to communicate with the home-assistant api
             web::http::client::http_client HomeAssistantClient(U("http://homeassistant.local:8123/api/"));
 
             // Create a new http_request to execute the smart device service
             web::http::http_request ExecuteServiceRequest(web::http::methods::POST);
-            ExecuteServiceRequest.set_request_uri(U("services/" + Domain + "/" + Service));
+            ExecuteServiceRequest.set_request_uri(U("services/" + DOMAIN + "/" + Service));
             ExecuteServiceRequest.headers().add("Authorization", "Bearer " + m_HASSAPIKey);
             ExecuteServiceRequest.headers().add("Content-Type", "application/json");
 
             // Add the body to the request
             web::json::value ExecuteServiceRequestBody = web::json::value::object();
-            ExecuteServiceRequestBody["entity_id"]     = web::json::value::string(DeviceName);
+            ExecuteServiceRequestBody["entity_id"]     = web::json::value::string(DEVICE_NAME);
             ExecuteServiceRequest.set_body(ExecuteServiceRequestBody);
 
             // Send the request and get the response
@@ -608,7 +608,7 @@ web::json::value Orion::ExecSmartDeviceService(const web::json::value& Devices, 
             }
             else
             {
-                std::cout << "Executed the smart device service: " << Service << " on the device: " << DeviceName << std::endl;
+                std::cout << "Executed the smart device service: " << Service << " on the device: " << DEVICE_NAME << std::endl;
             }
         }
 
@@ -690,7 +690,7 @@ pplx::task<web::json::value> Orion::GetChatHistoryAsync()
             });
 }
 
-pplx::task<void> Orion::SpeakSingleAsync(const std::string& Message, const uint8_t Index, const ETTSAudioFormat AudioFormat)
+pplx::task<void> Orion::SpeakSingleAsync(const std::string& Message, const uint8_t INDEX, const ETTSAudioFormat AUDIO_FORMAT)
 {
     // Create a new http_request to get the speech
     web::http::http_request TextToSpeechRequest(web::http::methods::POST);
@@ -707,27 +707,27 @@ pplx::task<void> Orion::SpeakSingleAsync(const std::string& Message, const uint8
     TextToSpeechRequestBody["response_format"] = web::json::value::string("mp3");
     std::string MimeType                       = "audio/mpeg";
 
-    if (AudioFormat == ETTSAudioFormat::Opus)
+    if (AUDIO_FORMAT == ETTSAudioFormat::Opus)
     {
         MimeType                                   = "audio/ogg";
         TextToSpeechRequestBody["response_format"] = web::json::value::string("opus");
     }
-    else if (AudioFormat == ETTSAudioFormat::AAC)
+    else if (AUDIO_FORMAT == ETTSAudioFormat::AAC)
     {
         MimeType                                   = "audio/aac";
         TextToSpeechRequestBody["response_format"] = web::json::value::string("aac");
     }
-    else if (AudioFormat == ETTSAudioFormat::FLAC)
+    else if (AUDIO_FORMAT == ETTSAudioFormat::FLAC)
     {
         MimeType                                   = "audio/flac";
         TextToSpeechRequestBody["response_format"] = web::json::value::string("flac");
     }
-    else if (AudioFormat == ETTSAudioFormat::Wav)
+    else if (AUDIO_FORMAT == ETTSAudioFormat::Wav)
     {
         MimeType                                   = "audio/wav";
         TextToSpeechRequestBody["response_format"] = web::json::value::string("wav");
     }
-    else if (AudioFormat == ETTSAudioFormat::PCM)
+    else if (AUDIO_FORMAT == ETTSAudioFormat::PCM)
     {
         MimeType                                   = "audio/wav";
         TextToSpeechRequestBody["response_format"] = web::json::value::string("pcm");
@@ -759,12 +759,12 @@ pplx::task<void> Orion::SpeakSingleAsync(const std::string& Message, const uint8
         TextToSpeechRequestBody["voice"] = web::json::value::string("shimmer");
     }
 
-    const auto Extension = "." + TextToSpeechRequestBody["response_format"].as_string();
+    const auto EXTENSION = "." + TextToSpeechRequestBody["response_format"].as_string();
 
     TextToSpeechRequest.set_body(TextToSpeechRequestBody);
 
     // Generate audio file name from index
-    std::string FileName = "audio/" + m_CurrentAssistantID + "/speech_" + std::to_string(Index) + Extension;
+    std::string FileName = "audio/" + m_CurrentAssistantID + "/speech_" + std::to_string(INDEX) + EXTENSION;
 
     // Send the request and get the response
     return m_OpenAIClient->request(TextToSpeechRequest)
@@ -806,11 +806,11 @@ pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string&
         [Message]
         {
             std::vector<std::string> Messages;
-            constexpr char           NewLineChar        = '\n';
-            constexpr char           PeriodChar         = '.';
-            constexpr size_t         MaxLengthSoftLimit = 256;
-            constexpr size_t         MaxLengthHardLimit = 4096;
-            constexpr size_t         DistanceThreshold  = 25;
+            constexpr char           NEWLINE_CHAR          = '\n';
+            constexpr char           PERIOD_CHAR           = '.';
+            constexpr size_t         MAX_LENGTH_SOFT_LIMIT = 256;
+            constexpr size_t         MAX_LENGTH_HARD_LIMIT = 4096;
+            constexpr size_t         DISTANCE_THRESHOLD    = 25;
 
             size_t MessageStart   = 0;                 // Start index of the current message
             size_t LastSplitIndex = std::string::npos; // Initialize to indicate no split index found yet
@@ -823,21 +823,21 @@ pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string&
                 // Look for next split point or end of message
                 while (Index < Message.length() && !DidReachHardLimit)
                 {
-                    if (Message[Index] == PeriodChar || Message[Index] == NewLineChar)
+                    if (Message[Index] == PERIOD_CHAR || Message[Index] == NEWLINE_CHAR)
                     {
                         LastSplitIndex = Index;
                     }
                     ++Index;
 
                     // Check conditions for splitting
-                    if ((Index - MessageStart >= MaxLengthSoftLimit &&
-                         (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DistanceThreshold)) ||
-                        Index - MessageStart >= MaxLengthHardLimit)
+                    if ((Index - MessageStart >= MAX_LENGTH_SOFT_LIMIT &&
+                         (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DISTANCE_THRESHOLD)) ||
+                        Index - MessageStart >= MAX_LENGTH_HARD_LIMIT)
                     {
                         DidReachHardLimit = true; // Force split if hard limit reached
                         // Adjust SplitIndex to last known good split if within threshold, otherwise split at current index
                         size_t SplitIndex =
-                            (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DistanceThreshold) ? LastSplitIndex : Index - 1;
+                            (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DISTANCE_THRESHOLD) ? LastSplitIndex : Index - 1;
                         Messages.push_back(Message.substr(MessageStart, SplitIndex - MessageStart + 1));
                         MessageStart   = SplitIndex + 1;
                         Index          = MessageStart;

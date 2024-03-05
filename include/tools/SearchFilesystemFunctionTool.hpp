@@ -11,7 +11,7 @@ namespace ORION
         struct Statics
         {
             /// @brief A function that searches the filesystem for a file, and returns the matches as well as their metadata/attributes
-            constexpr static const char* SearchFilesystem = R"(
+            constexpr static const char* SEARCH_FILESYSTEM = R"(
             {
                 "description" : "Searches the filesystem for a file, and returns the matches as well as their metadata/attributes",
                 "name" : "search_filesystem",
@@ -36,10 +36,10 @@ namespace ORION
             })";
         };
 
-        inline SearchFilesystemFunctionTool() : FunctionTool(Statics::SearchFilesystem)
+        inline SearchFilesystemFunctionTool() : FunctionTool(Statics::SEARCH_FILESYSTEM)
         {
         }
 
-        virtual std::string Execute(class Orion& orion, const web::json::value& parameters) override;
+        virtual std::string Execute(class Orion& Orion, const web::json::value& Parameters) override;
     };
 } // namespace ORION

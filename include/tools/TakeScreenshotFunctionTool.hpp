@@ -11,7 +11,7 @@ namespace ORION
         struct Statics
         {
             /// @brief A function that takes a screenshot of the desktop and returns a base64 encoded version of it
-            constexpr static const char* TakeScreenshot = R"(
+            constexpr static const char* TAKE_SCREENSHOT = R"(
             {
                 "description" : "Takes a screenshot of the desktop and returns a base64 encoded version of it",
                 "name" : "take_screenshot",
@@ -19,10 +19,10 @@ namespace ORION
             })";
         };
 
-        inline TakeScreenshotFunctionTool() : FunctionTool(Statics::TakeScreenshot)
+        inline TakeScreenshotFunctionTool() : FunctionTool(Statics::TAKE_SCREENSHOT)
         {
         }
 
-        virtual std::string Execute(class Orion& orion, const web::json::value& parameters) override;
+        virtual std::string Execute(class Orion& Orion, const web::json::value& Parameters) override;
     };
 } // namespace ORION

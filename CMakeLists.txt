@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.8)
 
 # Set the cmake toolchain file to use
-set(CMAKE_TOOLCHAIN_FILE "/mnt/Apps/Dev/Repositories/vcpkg/scripts/buildsystems/vcpkg.cmake")
+set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
 
 project(ORION VERSION 1.0 DESCRIPTION "Operational Reasoning and Intelligence Optimized Nexus")
 

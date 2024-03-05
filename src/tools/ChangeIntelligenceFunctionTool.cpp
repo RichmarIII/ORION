@@ -3,45 +3,45 @@
 
 using namespace ORION;
 
-std::string ChangeIntelligenceFunctionTool::Execute(Orion& orion, const web::json::value& parameters)
+std::string ChangeIntelligenceFunctionTool::Execute(Orion& Orion, const web::json::value& PARAMETERS)
 {
     try
     {
-        auto bChangeIntelligence = !parameters.at("list").as_bool();
-        if (!bChangeIntelligence)
+        const auto SHOULD_CHANGE_INTELLIGENCE = !PARAMETERS.at("list").as_bool();
+        if (!SHOULD_CHANGE_INTELLIGENCE)
         {
             // Wants to list the available intelligences
-            web::json::value json    = web::json::value::object();
-            json["intelligences"]    = web::json::value::array(2);
-            json["intelligences"][0] = web::json::value::string("base");
-            json["intelligences"][1] = web::json::value::string("super");
+            web::json::value Json    = web::json::value::object();
+            Json["intelligences"]    = web::json::value::array(2);
+            Json["intelligences"][0] = web::json::value::string("base");
+            Json["intelligences"][1] = web::json::value::string("super");
 
-            return json.serialize();
+            return Json.serialize();
         }
         else
         {
             // Wants to change the intelligence
-            std::string intelligence = parameters.at("intelligence").as_string();
-            if (intelligence == "base")
+            const std::string INTELLIGENCE = PARAMETERS.at("intelligence").as_string();
+            if (INTELLIGENCE == "base")
             {
-                orion.SetNewIntelligence(EOrionIntelligence::Base);
+                Orion.SetNewIntelligence(EOrionIntelligence::Base);
                 return std::string(R"({"message": "Changed intelligence to base"})");
             }
-            else if (intelligence == "super")
+            else if (INTELLIGENCE == "super")
             {
-                orion.SetNewIntelligence(EOrionIntelligence::Advanced);
+                Orion.SetNewIntelligence(EOrionIntelligence::Advanced);
                 return std::string(R"({"message": "Changed intelligence to super"})");
             }
             else
             {
-                std::cerr << "Unknown intelligence: " << intelligence << std::endl;
+                std::cerr << "Unknown intelligence: " << INTELLIGENCE << std::endl;
                 return std::string(R"({"message": "Unknown intelligence"})");
             }
         }
     }
-    catch (const std::exception& e)
+    catch (const std::exception& Exception)
     {
-        std::cerr << "Failed to change the intelligence: " << e.what() << std::endl;
-        return std::string(R"({"message": "Failed to change the intelligence"})");
+        std::cerr << "Failed to change the intelligence: " << Exception.what() << std::endl;
+        return std::string(R"({"message": "Failed to change the intelligence: )") + Exception.what() + "\"}";
     }
 }

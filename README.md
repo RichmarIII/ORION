@@ -45,11 +45,12 @@ ORION, an acronym for Operational Reasoning and Intelligence Optimized Nexus, br
 
 Before installing ORION, ensure you have the following:
 
-- **C++ Compiler (GCC, MSVC, or CLANG)**: Essential for compiling the project. Choose based on your platform for best compatibility.
+- **C++ Compiler (GCC, MSVC, or CLANG)**: Essential for compiling the project. Choose based on your platform for best compatibility
 - **CMake (version 3.8 or higher)**: Automates the build process, ensuring a smooth setup across different environments. [Download CMake](https://cmake.org/download/)
 - **vcpkg**: Manages C++ library dependencies. [vcpkg on GitHub](https://github.com/microsoft/vcpkg)
-- **OpenAI API key**: Powers AI functionalities. Obtain from [OpenAI](https://openai.com/).
-- **OpenWeatherMap API key**: Enables weather-related features. Sign up at [OpenWeatherMap](https://openweathermap.org/api).
+   > **Important Note:** `VCPKG_ROOT` environment variable needs to point to the root of your vcpkg installation and also added to `PATH`
+- **OpenAI API key**: Powers AI functionalities. Obtain from [OpenAI](https://openai.com/)
+- **OpenWeatherMap API key**: Enables weather-related features. Sign up at [OpenWeatherMap](https://openweathermap.org/api)
 - **Home-Assistant API key:** Enabled smart home related features. Obtain from [Home-Assistant](https://developers.home-assistant.io/docs/api/rest/ "How to obtain API Key")
 
 ### Installation Steps
@@ -62,11 +63,11 @@ Before installing ORION, ensure you have the following:
    ```bash
    cd ORION
    ```
-3. Install dependencies via vcpkg:
+4. Install dependencies via vcpkg:
    ```bash
    [path-to-vcpkg]/vcpkg install cpprestsdk
    ```
-4. Build ORION:
+5. Build ORION:
    ```
    mkdir build && cd build
    cmake .. -DCMAKE_TOOLCHAIN_FILE=[path-to-vcpkg]/scripts/buildsystems/vcpkg.cmake

@@ -11,7 +11,7 @@ namespace ORION
         struct Statics
         {
             /// @brief A function that changes (or lists) the current intelligence of the assistant
-            constexpr static const char* ChangeIntelligence = R"(
+            constexpr static const char* CHANGE_INTELLIGENCE = R"(
             {
                 "description" : "Changes (or lists) the current intelligence of the assistant. This will change the model that the assistant uses to respond to messages",
                 "name" : "change_intelligence",
@@ -34,10 +34,10 @@ namespace ORION
             })";
         };
 
-        inline ChangeIntelligenceFunctionTool() : FunctionTool(Statics::ChangeIntelligence)
+        inline ChangeIntelligenceFunctionTool() : FunctionTool(Statics::CHANGE_INTELLIGENCE)
         {
         }
 
-        virtual std::string Execute(class Orion& orion, const web::json::value& parameters) override;
+        virtual std::string Execute(class Orion& Orion, const web::json::value& Parameters) override;
     };
 } // namespace ORION

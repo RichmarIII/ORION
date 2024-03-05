@@ -14,7 +14,7 @@ namespace ORION
         /// @param function The json string representing the function
         /// @note The function must be a valid JSON string
         /// @see OrionFunctionStatics   For examples of valid functions
-        inline FunctionTool(const std::string& function) : m_Function(function)
+        inline FunctionTool(const std::string& FUNCTION) : m_Function(FUNCTION)
         {
         }
 
@@ -35,9 +35,9 @@ namespace ORION
 
         /// @brief  Execute the function
         /// @param  orion The Orion instance
-        /// @param  parameters The parameters to pass to the function
+        /// @param  Parameters The parameters to pass to the function
         /// @return The result of the function as a json string
-        virtual std::string Execute(class Orion& orion, const web::json::value& parameters) = 0;
+        virtual std::string Execute(class Orion& Orion, const web::json::value& Parameters) = 0;
 
     private:
         std::string m_Function;

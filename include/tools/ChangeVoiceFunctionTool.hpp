@@ -11,7 +11,7 @@ namespace ORION
         struct Statics
         {
             /// @brief A function that changes the voice of the assistant
-            constexpr static const char* ChangeVoice = R"(
+            constexpr static const char* CHANGE_VOICE = R"(
             {
                 "description" : "Changes the voice of the assistant",
                 "name" : "change_voice",
@@ -29,10 +29,10 @@ namespace ORION
             })";
         };
 
-        inline ChangeVoiceFunctionTool() : FunctionTool(Statics::ChangeVoice)
+        inline ChangeVoiceFunctionTool() : FunctionTool(Statics::CHANGE_VOICE)
         {
         }
 
-        virtual std::string Execute(class Orion& orion, const web::json::value& parameters) override;
+        virtual std::string Execute(class Orion& Orion, const web::json::value& Parameters) override;
     };
 } // namespace ORION

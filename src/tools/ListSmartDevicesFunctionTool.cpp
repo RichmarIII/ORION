@@ -3,18 +3,18 @@
 
 using namespace ORION;
 
-std::string ListSmartDevicesFunctionTool::Execute(Orion& orion, const web::json::value& parameters)
+std::string ListSmartDevicesFunctionTool::Execute(Orion& Orion, const web::json::value& PARAMETERS)
 {
     try
     {
         // Wants to list the smart devices
-        std::string Domain = parameters.at("domain").as_string();
-        std::string Result = orion.ListSmartDevices(Domain).serialize();
+        std::string Domain = PARAMETERS.at("domain").as_string();
+        std::string Result = Orion.ListSmartDevices(Domain).serialize();
         return Result;
     }
-    catch (const std::exception& e)
+    catch (const std::exception& Exception)
     {
-        std::cerr << "Failed to list the smart devices: " << e.what() << std::endl;
-        return std::string(R"({"message": "Failed to list the smart devices: )") + e.what() + R"("})";
+        std::cerr << "Failed to list the smart devices: " << Exception.what() << std::endl;
+        return std::string(R"({"message": "Failed to list the smart devices: )") + Exception.what() + R"("})";
     }
 }

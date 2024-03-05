@@ -11,7 +11,7 @@ namespace ORION
         struct Statics
         {
             /// @brief A function that executes a smart device service in the home provided by home-assistant api
-            constexpr static const char* ExecSmartDeviceService = R"(
+            constexpr static const char* EXEC_SMART_DEVICE_SERVICE = R"(
             {
                 "description" : "Executes a smart device service in the home provided by home-assistant api. only devices that are listed in the list_smart_devices response can be used",
                 "name" : "exec_smart_device_service",
@@ -32,10 +32,10 @@ namespace ORION
             })";
         };
 
-        inline ExecSmartDeviceServiceFunctionTool() : FunctionTool(Statics::ExecSmartDeviceService)
+        inline ExecSmartDeviceServiceFunctionTool() : FunctionTool(Statics::EXEC_SMART_DEVICE_SERVICE)
         {
         }
 
-        virtual std::string Execute(class Orion& orion, const web::json::value& parameters) override;
+        virtual std::string Execute(class Orion& Orion, const web::json::value& Parameters) override;
     };
 } // namespace ORION

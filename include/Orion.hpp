@@ -139,7 +139,7 @@ namespace ORION
         /// @param  szInstructions The instructions for the Orion instance
         /// @param  szDescription The description of the Orion instance
         Orion(const std::string& ID = "", std::vector<std::unique_ptr<IOrionTool>>&& Tools = {},
-              const EOrionIntelligence Intelligence = Defaults::INTELLIGENCE, const EOrionVoice Voice = Defaults::VOICE,
+              const EOrionIntelligence INTELLIGENCE = Defaults::INTELLIGENCE, const EOrionVoice VOICE = Defaults::VOICE,
               const char* pName = Defaults::NAME, const char* pInstructions = Defaults::INSTRUCTIONS,
               const char* pDescription = Defaults::DESCRIPTION);
 
@@ -167,7 +167,7 @@ namespace ORION
         /// @param  Message The message to speak
         /// @param  AudioFormat The audio format to use
         /// @return Nothing. The audio file will be saved to the disk with the format "audio/{assistant_id}/speech_{index}.{ext}"
-        pplx::task<void> SpeakAsync(const std::string& Message, const ETTSAudioFormat AudioFormat = ETTSAudioFormat::Default);
+        pplx::task<void> SpeakAsync(const std::string& Message, const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default);
 
         /// @brief  List the smart devices
         /// @param  Domain The Domain to list the smart devices for
@@ -182,11 +182,11 @@ namespace ORION
 
         /// @brief  Set New Voice
         /// @param  voice The voice to change to
-        void SetNewVoice(const EOrionVoice Voice);
+        void SetNewVoice(const EOrionVoice VOICE);
 
         /// @brief  Set New Intelligence
         /// @param  intelligence The intelligence to change to
-        void SetNewIntelligence(const EOrionIntelligence Intelligence);
+        void SetNewIntelligence(const EOrionIntelligence INTELLIGENCE);
 
         /// @brief  Get the current assistant ID
         /// @return The current assistant ID
@@ -236,8 +236,8 @@ namespace ORION
         /// @param  Index The index of the message
         /// @param  AudioFormat The audio format to use
         /// @return Nothing. The audio file will be saved to the disk with the format "audio/{assistant_id}/speech_{index}.{ext}"
-        pplx::task<void> SpeakSingleAsync(const std::string& Message, const uint8_t Index,
-                                          const ETTSAudioFormat AudioFormat = ETTSAudioFormat::Default);
+        pplx::task<void> SpeakSingleAsync(const std::string& Message, const uint8_t INDEX,
+                                          const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default);
 
         /// @brief  Split the message into multiple parts if it is too long asynchronously. This is a helper function that is called by the SpeakAsync
         /// function.

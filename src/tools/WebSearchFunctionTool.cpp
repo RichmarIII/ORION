@@ -3,7 +3,7 @@
 
 using namespace ORION;
 
-std::string WebSearchFunctionTool::Execute(Orion& orion, const web::json::value& parameters)
+std::string WebSearchFunctionTool::Execute(Orion& Orion, const web::json::value& PARAMETERS)
 {
     return std::string("not implemented");
 }

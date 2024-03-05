@@ -11,7 +11,7 @@ namespace ORION
         struct Statics
         {
             /// @brief A function that gets the weather for a location
-            constexpr static const char* GetWeather = R"(
+            constexpr static const char* GET_WEATHER = R"(
             {
                 "description" : "Gets the weather for a location",
                 "name" : "get_weather",
@@ -33,10 +33,10 @@ namespace ORION
             })";
         };
 
-        inline GetWeatherFunctionTool() : FunctionTool(Statics::GetWeather)
+        inline GetWeatherFunctionTool() : FunctionTool(Statics::GET_WEATHER)
         {
         }
 
-        virtual std::string Execute(class Orion& orion, const web::json::value& parameters) override;
+        virtual std::string Execute(class Orion& Orion, const web::json::value& Parameters) override;
     };
 } // namespace ORION
