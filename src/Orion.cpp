@@ -247,11 +247,12 @@ pplx::task<std::string> Orion::SendMessageAsync(const std::string& Message)
                                 }
                             }
 
-                            // Combine the messages
+                            // Combine the messages in reverse order since new messages are at the beginning of the array
+                            // and we want to keep the order of the messages the same as the order they were sent in
                             std::string CombinedMessage;
-                            for (const auto& Message : NewMessages)
+                            for (auto It = NewMessages.rbegin(); It != NewMessages.rend(); ++It)
                             {
-                                CombinedMessage += Message + " \n";
+                                CombinedMessage += *It;
                             }
 
                             return pplx::task_from_result(CombinedMessage);
@@ -474,14 +475,16 @@ pplx::task<void> Orion::SpeakAsync(const std::string& Message, const ETTSAudioFo
     return SplitMessageAsync(Message).then(
         [this, AUDIO_FORMAT](pplx::task<std::vector<std::string>> SplitMessageTask)
         {
-            const auto SPLIT_MESSAGES = SplitMessageTask.get();
+            const auto        SPLIT_MESSAGES = SplitMessageTask.get();
+            const std::string AUDIO_DIR      = "audio/" + m_CurrentAssistantID;
 
             // Each orion instance has it's own folder for audio files to avoid conflicts. Append the assistant id to the audio folder.
             // Create the audio directory if it doesn't exist
             std::error_code ErrorCode;
-            if (!std::filesystem::exists("audio/" + m_CurrentAssistantID, ErrorCode))
+            if (!std::filesystem::exists(AUDIO_DIR, ErrorCode))
             {
-                std::filesystem::create_directory("audio/" + m_CurrentAssistantID, ErrorCode);
+                // Create the audio directory tree
+                std::filesystem::create_directories(AUDIO_DIR, ErrorCode);
                 if (ErrorCode)
                 {
                     std::cerr << "Failed to create the audio directory" << std::endl;
@@ -490,7 +493,7 @@ pplx::task<void> Orion::SpeakAsync(const std::string& Message, const ETTSAudioFo
             }
 
             // Delete all the audio files in the directory
-            for (const auto& Entry : std::filesystem::directory_iterator("audio/" + m_CurrentAssistantID))
+            for (const auto& Entry : std::filesystem::directory_iterator(AUDIO_DIR))
             {
                 std::filesystem::remove(Entry.path(), ErrorCode);
                 if (ErrorCode)

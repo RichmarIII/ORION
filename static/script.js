@@ -10,17 +10,34 @@ document.getElementById('send-button').addEventListener('click', function()
     }
 });
 
+// Many browsers do not support playing audio files without user interaction.
+// As a workaround, when the user touches the screen, we will play a silent audio file.
+// This will allow us to play audio files later without user interaction.
+document.addEventListener('touchstart', function()
+{
+    // Get the audio element
+    let audio = document.getElementById('audio')
+
+    // This is a tiny MP3 file that is silent and extremely short
+    audio.src = "data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
+    audio.play();
+
+    // Remove the event listener so that the audio is only played once
+    document.removeEventListener('touchstart', arguments.callee);
+});
+
 async function playAudioFilesSequentially(index = 0)
 {
         const timestamp = new Date().getTime();
-        const fileName = `speech_${index}.opus?${timestamp}`;
+        const fileName = `speech_${index}.mp3?${timestamp}`;
         const orionID = localStorage.getItem('orion_id');
         const fullPath = `/audio/${orionID}/${fileName}`;
         console.log('Playing audio file:', fullPath);
 
-        // Create an audio element and set its source to the audio file
-        let audio = new Audio(fullPath);
+        // Get the audio element and set its source to the audio file
+        let audio = document.getElementById('audio');
         audio.preload = 'none';
+        audio.src = fullPath;
         
         // Play the audio file
         audio.play();
@@ -208,7 +225,7 @@ async function addMessageToChat(message, files)
             chatArea.scrollTop = chatArea.scrollHeight;
 
             // Now lets speak the message
-            fetch('/speak?format=opus', {
+            fetch('/speak?format=mp3', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'text/plain',

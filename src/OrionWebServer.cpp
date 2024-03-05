@@ -20,7 +20,7 @@ using namespace ORION;
 void OrionWebServer::Start(int Port)
 {
     // Create a listener
-    m_Listener = web::http::experimental::listener::http_listener(U("http://localhost:") + std::to_string(Port));
+    m_Listener = web::http::experimental::listener::http_listener(U("http://0.0.0.0:") + std::to_string(Port));
 
     // Handle requests
     m_Listener.support(web::http::methods::POST, std::bind(&OrionWebServer::HandleRequest, this, std::placeholders::_1));
