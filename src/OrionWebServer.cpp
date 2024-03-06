@@ -14,8 +14,51 @@
 #include <cmark.h>
 
 #include <cpprest/filestream.h>
+#include <MimeTypes.hpp>
+
+#include <filesystem>
 
 using namespace ORION;
+
+std::string OrionWebServer::AssetDirectories::ResolveBaseAssetDirectory(const std::string& Extension)
+{
+    // Get the mime type
+    const auto MIME_TYPE = MimeTypes::GetMimeType(Extension);
+
+    // Get the current application directory
+    const auto APP_DIR = std::filesystem::current_path();
+
+    // Image files
+    if (MIME_TYPE.find("image") != std::string::npos)
+    {
+        return APP_DIR / STATIC_IMAGES_DIR;
+    }
+    // Audio files
+    else if (MIME_TYPE.find("audio") != std::string::npos)
+    {
+        return APP_DIR / STATIC_AUDIO_DIR;
+    }
+    // Script files
+    else if (MIME_TYPE.find("javascript") != std::string::npos)
+    {
+        return APP_DIR / STATIC_SCRIPTS_DIR;
+    }
+    // Stylesheets
+    else if (MIME_TYPE.find("css") != std::string::npos)
+    {
+        return APP_DIR / STATIC_STYLES_DIR;
+    }
+    // HTML files
+    else if (MIME_TYPE.find("html") != std::string::npos)
+    {
+        return APP_DIR / STATIC_HTML_DIR;
+    }
+    // Other files
+    else
+    {
+        return APP_DIR / STATIC_ASSETS_DIR;
+    }
+}
 
 void OrionWebServer::Start(int Port)
 {
@@ -82,14 +125,13 @@ void OrionWebServer::HandleRequest(web::http::http_request Request)
     {
         HandleCreateOrionEndpoint(Request);
     }
-    // Check if /audio is in the request path
-    else if (Path.find(U("/audio")) != std::string::npos)
+    else if (Path.find(U("/speech/")) != std::string::npos)
     {
-        HandleAudioFileEndpoint(Request);
+        HandleSpeechAssetFileEndpoint(Request);
     }
     else
     {
-        HandleStaticFileEndpoint(Request);
+        HandleAssetFileEndpoint(Request);
     }
 }
 
@@ -147,8 +189,11 @@ void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
 
 void OrionWebServer::HandleRootEndpoint(web::http::http_request Request)
 {
+    constexpr auto INDEX_HTML {U("index.html")};
+    const auto     INDEX_HTML_PATH = std::filesystem::path(AssetDirectories::ResolveBaseAssetDirectory(INDEX_HTML)) / INDEX_HTML;
+
     // Find the index.html file
-    std::ifstream IndexFile("templates/index.html");
+    std::ifstream IndexFile {INDEX_HTML_PATH};
     if (!IndexFile.is_open())
     {
         Request.reply(web::http::status_codes::NotFound, U("The index.html file was not found."));
@@ -156,81 +201,34 @@ void OrionWebServer::HandleRootEndpoint(web::http::http_request Request)
     }
 
     // Read the contents of the index.html file
-    std::string IndexContents((std::istreambuf_iterator<char>(IndexFile)), std::istreambuf_iterator<char>());
+    std::string IndexContents {std::istreambuf_iterator<char>(IndexFile), std::istreambuf_iterator<char>()};
 
     // Send the contents of the index.html file
-    Request.reply(web::http::status_codes::OK, IndexContents, U("text/html"));
+    const auto MIME_TYPE = MimeTypes::GetMimeType(INDEX_HTML);
+    Request.reply(web::http::status_codes::OK, IndexContents, MIME_TYPE);
 }
 
-void OrionWebServer::HandleStaticFileEndpoint(web::http::http_request Request)
+void OrionWebServer::HandleAssetFileEndpoint(web::http::http_request Request)
 {
-    // Get the file name from the request path
-    auto FileName = Request.request_uri().path();
+    // Get the file name from the request path and make it relative (remove the leading slash)
+    const auto FILE_NAME {std::filesystem::path(Request.request_uri().path()).relative_path()};
 
-    // Remove the leading slash
-    FileName = FileName.substr(1);
+    // Calculate file path based on the file extension
+    const std::string FILE_PATH {AssetDirectories::ResolveBaseAssetDirectory(FILE_NAME) / FILE_NAME};
 
-    // Get the file extension
-    const auto LAST_DOT_INDEX = FileName.find_last_of('.');
-    if (LAST_DOT_INDEX == std::string::npos)
-    {
-        Request.reply(web::http::status_codes::BadRequest, U("No file extension was found."));
-        return;
-    }
-
-    // Get the file extension
-    const auto EXTENSION = FileName.substr(LAST_DOT_INDEX);
-
-    // Calculate the content type
-    utility::string_t ContentType;
-    if (EXTENSION == U(".html"))
-        ContentType = U("text/html");
-    else if (EXTENSION == U(".css"))
-        ContentType = U("text/css");
-    else if (EXTENSION == U(".js"))
-        ContentType = U("application/javascript");
-    else if (EXTENSION == U(".png"))
-        ContentType = U("image/png");
-    else if (EXTENSION == U(".jpg") || EXTENSION == U(".jpeg"))
-        ContentType = U("image/jpeg");
-    else if (EXTENSION == U(".gif"))
-        ContentType = U("image/gif");
-    else if (EXTENSION == U(".svg"))
-        ContentType = U("image/svg+xml");
-    else if (EXTENSION == U(".ico"))
-        ContentType = U("image/x-icon");
-    else if (EXTENSION == U(".mp4"))
-        ContentType = U("video/mp4");
-    else if (EXTENSION == U(".webm"))
-        ContentType = U("video/webm");
-    else if (EXTENSION == U(".mp3"))
-        ContentType = U("audio/mpeg");
-    else if (EXTENSION == U(".wav"))
-        ContentType = U("audio/wav");
-    else if (EXTENSION == U(".ogg"))
-        ContentType = U("audio/ogg");
-    else if (EXTENSION == U(".opus"))
-        ContentType = U("audio/ogg");
-    else if (EXTENSION == U(".flac"))
-        ContentType = U("audio/flac");
-    else if (EXTENSION == U(".aac"))
-        ContentType = U("audio/aac");
-    else
-        ContentType = U("application/octet-stream"); // Default to binary stream for unknown file types
-
-    // Prepend the static directory to the file name
-    FileName = "static/" + FileName;
+    // Get mime type from file extension
+    const std::string CONTENT_TYPE {MimeTypes::GetMimeType(FILE_PATH)};
 
     // Stream the file to the response
-    concurrency::streams::fstream::open_istream(FileName)
+    concurrency::streams::fstream::open_istream(FILE_PATH)
         .then(
-            [Request, ContentType](concurrency::streams::istream StaticFileInputStream)
+            [Request, CONTENT_TYPE](concurrency::streams::istream StaticFileInputStream)
             {
                 // Send the response
-                Request.reply(web::http::status_codes::OK, StaticFileInputStream, ContentType);
+                Request.reply(web::http::status_codes::OK, StaticFileInputStream, CONTENT_TYPE);
             })
         .then(
-            [FileName, Request](pplx::task<void> OpenStreamTask)
+            [FILE_PATH, Request](pplx::task<void> OpenStreamTask)
             {
                 try
                 {
@@ -238,52 +236,70 @@ void OrionWebServer::HandleStaticFileEndpoint(web::http::http_request Request)
                 }
                 catch (std::exception& Exception)
                 {
-                    std::cerr << Exception.what() << std::endl;
-                    std::cout << Exception.what() << std::endl;
+                    std::cout << U("The file ") << FILE_PATH << U(" was not found: ") << std::endl;
 
                     Request.reply(web::http::status_codes::NotFound,
-                                  U("The file ") + FileName + U(" was not found: ") + std::string(Exception.what()));
+                                  U("The file ") + FILE_PATH + U(" was not found: ") + std::string(Exception.what()));
                 }
             });
 }
 
-void OrionWebServer::HandleAudioFileEndpoint(web::http::http_request Request)
+void OrionWebServer::HandleSpeechAssetFileEndpoint(web::http::http_request Request)
 {
-    // Get the file name from the request path
-    auto FileName = Request.request_uri().path();
+    // Get Orion ID from the request header
+    const auto ORION_ID {Request.headers().find(U("X-Orion-Id"))->second};
 
-    // Remove the leading slash
-    FileName = FileName.substr(1);
+    if (ORION_ID.empty())
+    {
+        Request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
+        return;
+    }
 
-    // Calculate the content type
-    std::string ContentType = U("audio/mpeg");
-    if (FileName.find(U(".opus")) != std::string::npos)
+    // get the audio format from the query parameter
+    std::string AudioFormat = "mp3";
+    if (Request.request_uri().query().find(U("format=opus")) != std::string::npos)
     {
-        ContentType = U("audio/ogg");
+        AudioFormat = "opus";
     }
-    else if (FileName.find(U(".flac")) != std::string::npos)
+    else if (Request.request_uri().query().find(U("format=flac")) != std::string::npos)
     {
-        ContentType = U("audio/flac");
+        AudioFormat = "flac";
     }
-    else if (FileName.find(U(".aac")) != std::string::npos)
+    else if (Request.request_uri().query().find(U("format=aac")) != std::string::npos)
     {
-        ContentType = U("audio/aac");
+        AudioFormat = "aac";
     }
-    else if (FileName.find(U(".wav")) != std::string::npos)
+    else if (Request.request_uri().query().find(U("format=pcm")) != std::string::npos)
     {
-        ContentType = U("audio/wav");
+        AudioFormat = "pcm";
     }
+    else if (Request.request_uri().query().find(U("format=wav")) != std::string::npos)
+    {
+        AudioFormat = "wav";
+    }
+
+    // Get the index from the request path
+    const auto SPEECH_INDEX {Request.request_uri().path().substr(Request.request_uri().path().find_last_of('/') + 1)};
+
+    // The speech file name
+    const auto SPEECH_FILE_NAME {SPEECH_INDEX + "." + AudioFormat};
+
+    // Speech file path
+    const std::string SPEECH_FILE_PATH = std::filesystem::path(AssetDirectories::ResolveOrionAudioDir(ORION_ID)) / SPEECH_FILE_NAME;
+
+    // Get mime type from file extension
+    const auto CONTENT_TYPE {MimeTypes::GetMimeType(SPEECH_FILE_PATH)};
 
     // Stream the file to the response
-    concurrency::streams::fstream::open_istream(FileName)
+    concurrency::streams::fstream::open_istream(SPEECH_FILE_PATH)
         .then(
-            [Request, ContentType](concurrency::streams::istream AudioFileInputStream)
+            [Request, CONTENT_TYPE](concurrency::streams::istream StaticFileInputStream)
             {
-                // Send the response.  Make sure to specify the content type
-                Request.reply(web::http::status_codes::OK, AudioFileInputStream, ContentType);
+                // Send the response
+                Request.reply(web::http::status_codes::OK, StaticFileInputStream, CONTENT_TYPE);
             })
         .then(
-            [FileName, Request](pplx::task<void> OpenStreamTask)
+            [SPEECH_FILE_PATH, Request](pplx::task<void> OpenStreamTask)
             {
                 try
                 {
@@ -291,11 +307,10 @@ void OrionWebServer::HandleAudioFileEndpoint(web::http::http_request Request)
                 }
                 catch (std::exception& Exception)
                 {
-                    std::cerr << Exception.what() << std::endl;
-                    std::cout << Exception.what() << std::endl;
+                    std::cout << U("The file ") << SPEECH_FILE_PATH << U(" was not found: ") << std::endl;
 
                     Request.reply(web::http::status_codes::NotFound,
-                                  U("The file ") + FileName + U(" was not found: ") + std::string(Exception.what()));
+                                  U("The file ") + SPEECH_FILE_PATH + U(" was not found: ") + std::string(Exception.what()));
                 }
             });
 }

@@ -1,5 +1,6 @@
 #include "Orion.hpp"
 #include "tools/FunctionTool.hpp"
+#include "OrionWebServer.hpp"
 
 // Include cpprestsdk headers
 #include <cpprest/http_client.h>
@@ -475,8 +476,8 @@ pplx::task<void> Orion::SpeakAsync(const std::string& Message, const ETTSAudioFo
     return SplitMessageAsync(Message).then(
         [this, AUDIO_FORMAT](pplx::task<std::vector<std::string>> SplitMessageTask)
         {
-            const auto        SPLIT_MESSAGES = SplitMessageTask.get();
-            const std::string AUDIO_DIR      = "audio/" + m_CurrentAssistantID;
+            const auto        SPLIT_MESSAGES {SplitMessageTask.get()};
+            const std::string AUDIO_DIR {OrionWebServer::AssetDirectories::ResolveOrionAudioDir(m_CurrentAssistantID)};
 
             // Each orion instance has it's own folder for audio files to avoid conflicts. Append the assistant id to the audio folder.
             // Create the audio directory if it doesn't exist
@@ -732,7 +733,7 @@ pplx::task<void> Orion::SpeakSingleAsync(const std::string& Message, const uint8
     }
     else if (AUDIO_FORMAT == ETTSAudioFormat::PCM)
     {
-        MimeType                                   = "audio/wav";
+        MimeType                                   = "audio/pcm";
         TextToSpeechRequestBody["response_format"] = web::json::value::string("pcm");
     }
 
@@ -767,12 +768,14 @@ pplx::task<void> Orion::SpeakSingleAsync(const std::string& Message, const uint8
     TextToSpeechRequest.set_body(TextToSpeechRequestBody);
 
     // Generate audio file name from index
-    std::string FileName = "audio/" + m_CurrentAssistantID + "/speech_" + std::to_string(INDEX) + EXTENSION;
+    const auto        AUDIO_DIR = std::filesystem::path(OrionWebServer::AssetDirectories::ResolveOrionAudioDir(m_CurrentAssistantID));
+    const std::string FILE_NAME = std::to_string(INDEX) + EXTENSION;
+    const std::string FILE_PATH = (AUDIO_DIR / FILE_NAME).string();
 
     // Send the request and get the response
     return m_OpenAIClient->request(TextToSpeechRequest)
         .then(
-            [FileName, MimeType](web::http::http_response TextToSpeechResponse)
+            [FILE_PATH, MimeType](web::http::http_response TextToSpeechResponse)
             {
                 if (TextToSpeechResponse.status_code() == web::http::status_codes::OK)
                 {
@@ -780,8 +783,8 @@ pplx::task<void> Orion::SpeakSingleAsync(const std::string& Message, const uint8
                     // Then return the filename once the file has started streaming
 
                     // Create a file stream
-                    return concurrency::streams::fstream::open_ostream(FileName).then(
-                        [TextToSpeechResponse, FileName, MimeType](concurrency::streams::ostream AudioFileStream)
+                    return concurrency::streams::fstream::open_ostream(FILE_PATH).then(
+                        [TextToSpeechResponse, FILE_PATH, MimeType](concurrency::streams::ostream AudioFileStream)
                         {
                             // Stream the response to the file
                             TextToSpeechResponse.body().read_to_end(AudioFileStream.streambuf()).wait();

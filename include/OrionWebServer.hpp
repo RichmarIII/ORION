@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include "Orion.hpp"
+#include <regex>
 
 namespace ORION
 {
@@ -14,6 +15,89 @@ namespace ORION
     class OrionWebServer
     {
     public:
+        /// @brief  This struct contains all of the string constants used in string templating throughout the Orion Web Server.
+        ///         It helps prevent accidental typos and makes it easier to find and change string constants.
+        ///
+        ///         The string constants defined in this struct are used as templates for constructing file paths and URLs
+        ///         within the Orion Web Server. They are designed to be easily customizable and allow for dynamic
+        ///         substitution of values, such as the Orion instance ID.
+        ///
+        ///         For example, the `ORION_AUDIO_DIR_TEMPLATE` constant is used to define the directory path
+        ///         where the web server will look for generated audio files specific to an Orion instance.
+        ///         The `{orion_id}` placeholder within this constant will be replaced with the actual ID of the Orion instance
+        ///         during runtime.
+        ///
+        ///         Additionally, other constants such as `STATIC_IMAGE_DIR`, `STATIC_STYLE_DIR`, `STATIC_SCRIPT_DIR`,
+        ///         `STATIC_HTML_DIR`, `STATIC_FONT_DIR`, and `STATIC_AUDIO_DIR` define the directory paths for
+        ///         various types of static assets (images, stylesheets, scripts, HTML files, fonts, and audio files)
+        ///         that are not specific to any particular Orion instance.
+        struct AssetDirectories
+        {
+#define ASSETS_DIR "assets"               // The directory where the web server will look for all assets
+#define ORION_ID_PLACEHOLDER "{orion_id}" // The placeholder for the Orion id in template strings
+#define AUDIO_DIR_TEMPLATE "{audio_dir}"  // The placeholder for the audio directory in template strings
+
+            /// @brief  The root directory where the web server will look for static assets not specific to an Orion instance
+            static constexpr const char* STATIC_ASSETS_DIR = ASSETS_DIR;
+
+            /// @brief  The directory where the web server will look for static image files not specific to an Orion instance
+            static constexpr const char* STATIC_IMAGES_DIR = ASSETS_DIR "/images";
+
+            /// @brief  The directory where the web server will look for static style files not specific to an Orion instance
+            static constexpr const char* STATIC_STYLES_DIR = ASSETS_DIR "/styles";
+
+            /// @brief  The directory where the web server will look for static script files not specific to an Orion instance
+            static constexpr const char* STATIC_SCRIPTS_DIR = ASSETS_DIR "/scripts";
+
+            /// @brief  The directory where the web server will look for static html files not specific to an Orion instance
+            static constexpr const char* STATIC_HTML_DIR = ASSETS_DIR "/html";
+
+            /// @brief  The directory where the web server will look for static audio files not specific to an Orion instance
+            static constexpr const char* STATIC_AUDIO_DIR = ASSETS_DIR "/audio";
+
+            /// @brief  The directory where the web server will look for generated audio files specific to an Orion instance
+            /// @note   The {orion_id} placeholder will be replaced with the id of the Orion instance
+            static constexpr const char* ORION_AUDIO_DIR_TEMPLATE = AUDIO_DIR_TEMPLATE "/" ORION_ID_PLACEHOLDER "/speech";
+
+            template <typename... Args>
+            static std::string ResolveTemplate(const std::string& TemplateString, Args&&... Values)
+            {
+                std::regex        RegexPattern("\\{.*?\\}");
+                std::stringstream ResultStream;
+                std::string       Argument;
+                std::stringstream ArgumentsStream;
+                ((ArgumentsStream << Values << ' '), ...);
+                std::istringstream ArgumentsIn(ArgumentsStream.str());
+
+                size_t Start = 0;
+                for (std::sregex_iterator Iter = std::sregex_iterator(TemplateString.begin(), TemplateString.end(), RegexPattern);
+                     Iter != std::sregex_iterator(); ++Iter)
+                {
+                    std::smatch Match = *Iter;
+                    if (std::getline(ArgumentsIn, Argument, ' '))
+                    {
+                        ResultStream << TemplateString.substr(Start, Match.position() - Start) << Argument;
+                        Start = Match.position() + Match.length();
+                    }
+                }
+
+                ResultStream << TemplateString.substr(Start);
+                return ResultStream.str();
+            }
+
+            static inline std::string ResolveOrionAudioDir(const std::string& OrionId)
+            {
+                return ResolveTemplate(ORION_AUDIO_DIR_TEMPLATE, STATIC_AUDIO_DIR, OrionId);
+            }
+
+            /// @brief  Resolves the base asset directory for a given file extension
+            /// @param  Extension The file extension
+            /// @return The base asset directory (absolute path to the directory where the web server will look for assets of the given extension)
+            static std::string ResolveBaseAssetDirectory(const std::string& Extension);
+
+#undef ASSETS_DIR
+        };
+
         /// @brief  Destructor (virtual for inheritance)
         virtual ~OrionWebServer() = default;
 
@@ -35,44 +119,44 @@ namespace ORION
         /// @brief  The /send_message endpoint is used to send a message to Orion. optionally converting it to markdown via the ?markdown=true query
         /// parameter
         /// @param  Request The HTTP request
-        /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/send_message
+        /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/send_message
         /// @example Response: "Hello, user!"
-        /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/send_message?markdown=true
+        /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/send_message?markdown=true
         /// @example Response: "<p>Hello, user!</p>"
         void HandleSendMessageEndpoint(web::http::http_request Request);
 
         /// @brief  The / endpoint is used to serve the Orion web interface
         /// @param  Request The HTTP request
-        /// @example curl -X GET http://localhost:8080/
+        /// @example curl -X GET http://localhost:5000/
         /// @example Response: The contents of the index.html file
         void HandleRootEndpoint(web::http::http_request Request);
 
-        /// @brief  The /<file> endpoint is used to serve static files.
-        ///         This is a catch-all endpoint that will serve any file in the static directory.
+        /// @brief  The /<file> endpoint is used to serve asset files (images, stylesheets, scripts, etc.)
+        ///         This is a catch-all endpoint that will serve any file in the assets directory.
         /// @param  Request The HTTP request
-        /// @example curl -X GET http://localhost:8080/image.png
-        /// @example Response: The contents of the image.png file served from the static directory
-        void HandleStaticFileEndpoint(web::http::http_request Request);
+        /// @example curl -X GET http://localhost:5000/image.png
+        /// @example Response: The contents of the image.png file served from the assets directory
+        void HandleAssetFileEndpoint(web::http::http_request Request);
 
-        /// @brief  The /audio/<file> endpoint is used to serve audio files.
-        ///         This is a catch-all endpoint that will serve any file in the audio directory.
-        /// @param  Request The HTTP request
-        /// @example curl -X GET http://localhost:8080/audio/audio1.mp3
-        /// @example Response: The contents of the audio1.mp3 file served from the audio directory
-        void HandleAudioFileEndpoint(web::http::http_request Request);
+        /// @brief  The /speech/<index> endpoint is used to serve speech asset files (audio files).
+        ///         Defaults to mp3 format if no format is specified.
+        /// @param Request The HTTP request
+        /// @example curl -X GET http://localhost:5000/speech/{index}?format=mp3
+        /// @example Response: The contents of the audio file served from the speech directory
+        void HandleSpeechAssetFileEndpoint(web::http::http_request Request);
 
         /// @brief  The /markdown endpoint is used to convert a message to markdown
         /// @param  Request The HTTP request
-        /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/markdown
+        /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/markdown
         /// @example Response: "<p>Hello, Orion!"</p>
         void HandleMarkdownEndpoint(web::http::http_request Request);
 
         /// @brief  The /chat_history endpoint is used to retrieve the chat history.
         /// Optionally converting it to markdown via the ?markdown=true query parameter
         /// @param  Request The HTTP request
-        /// @example curl -X GET http://localhost:8080/chat_history
+        /// @example curl -X GET http://localhost:5000/chat_history
         /// @example Response: [{ "role": "user", "message": "Hello, Orion!" }, { "role": "orion", "message": "Hello, user!" }]
-        /// @example curl -X GET http://localhost:8080/chat_history?markdown=true
+        /// @example curl -X GET http://localhost:5000/chat_history?markdown=true
         /// @example Response: [{ "role": "user", "message": "<p>Hello, Orion!</p>" }, { "role": "orion", "message": "<p>Hello, user!</p>" }]
         void HandleChatHistoryEndpoint(web::http::http_request Request);
 
@@ -80,9 +164,9 @@ namespace ORION
         /// Supported audio formats: mp3, opus, aac, flac, wav, and pcm
         /// Audio is segmented into multiple files if the message is too long.
         /// @param  Request The HTTP request
-        /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak
-        /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak?format=opus
-        /// @example curl -X POST -d "Hello, Orion!" http://localhost:8080/speak?format=wav
+        /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/speak
+        /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/speak?format=opus
+        /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/speak?format=wav
         /// @note   The audio files are stored in the audio/{orion_id} directory
         void HandleSpeakEndpoint(web::http::http_request Request);
 
@@ -90,9 +174,9 @@ namespace ORION
         /// The Orion instance is returned as a JSON object with an id property. This id must be used in the X-Orion-Id header for all requests.
         /// If you want to retrieve an existing Orion instance, you can send the id as a query parameter.
         /// @param  Request The HTTP request
-        /// @example curl -X POST http://localhost:8080/create_orion
+        /// @example curl -X POST http://localhost:5000/create_orion
         /// @example Response: { "id": "1234" }
-        /// @example curl -X POST http://localhost:8080/create_orion?id=1234
+        /// @example curl -X POST http://localhost:5000/create_orion?id=1234
         /// @example Response: { "id": "1234" }
         /// @note   The Orion instance id should be stored and used in the X-Orion-Id header for all requests.
         void HandleCreateOrionEndpoint(web::http::http_request Request);

@@ -19,14 +19,9 @@ include_directories(include)
 
 # List all the asset files to watch for changes. changing any of these files will trigger the post-build copy assets command
 # which will copy all the assets to the executable directory
-set(ASSETS
-    ${CMAKE_SOURCE_DIR}/templates/index.html
-    ${CMAKE_SOURCE_DIR}/static/script.js
-    ${CMAKE_SOURCE_DIR}/static/styles.css
-    ${CMAKE_SOURCE_DIR}/static/paperclip-plus.svg
-    ${CMAKE_SOURCE_DIR}/.openai_api_key.txt
-    ${CMAKE_SOURCE_DIR}/.openweather_api_key.txt
-    ${CMAKE_SOURCE_DIR}/.hass_api_key.txt
+# use file(GLOB_RECURSE ASSETS "${CMAKE_SOURCE_DIR}/assets/*") to include all files in the assets directory
+file(GLOB_RECURSE ASSETS
+    "${CMAKE_SOURCE_DIR}/assets/*"
 )
 
 # The generated .cpp file to trigger post-build copy assets command.
@@ -56,6 +51,7 @@ set(SOURCES
     src/tools/ChangeIntelligenceFunctionTool.cpp
     src/tools/ListSmartDevicesFunctionTool.cpp
     src/tools/ExecSmartDeviceServiceFunctionTool.cpp
+    src/MimeTypes.cpp
 
     ${ASSETS_CPP_FILE} # This is the generated .cpp file to trigger post-build copy assets command
 )
@@ -84,12 +80,8 @@ add_custom_command(TARGET ORION POST_BUILD
     $<TARGET_FILE_DIR:ORION>/.hass_api_key.txt
 
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_SOURCE_DIR}/templates
-    $<TARGET_FILE_DIR:ORION>/templates
-
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_SOURCE_DIR}/static
-    $<TARGET_FILE_DIR:ORION>/static
+    ${CMAKE_SOURCE_DIR}/assets
+    $<TARGET_FILE_DIR:ORION>/assets
 
     COMMENT "Copying asset files to the executable directory..."
 )

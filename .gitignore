@@ -7,3 +7,4 @@
 *.mp3
 build/
 src/generated/**
+index_preview.html

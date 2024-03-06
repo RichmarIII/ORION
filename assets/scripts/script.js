@@ -28,26 +28,32 @@ document.addEventListener('touchstart', function()
 
 async function playAudioFilesSequentially(index = 0)
 {
-        const timestamp = new Date().getTime();
-        const fileName = `speech_${index}.mp3?${timestamp}`;
-        const orionID = localStorage.getItem('orion_id');
-        const fullPath = `/audio/${orionID}/${fileName}`;
-        console.log('Playing audio file:', fullPath);
+    const orionID = localStorage.getItem('orion_id');
 
-        // Get the audio element and set its source to the audio file
-        let audio = document.getElementById('audio');
-        audio.preload = 'none';
-        audio.src = fullPath;
-        
-        // Play the audio file
-        audio.play();
+    const speechEndpoint = '/speech/' + index;
 
-        return new Promise(resolve => {
-            // Once the audio ends, play the next one
-            audio.onended = () => {
-                resolve(playAudioFilesSequentially(index + 1));
+    // Fetch the audio files from the server
+    await fetch(speechEndpoint, {
+        method: 'GET',
+        headers: {
+            'X-Orion-Id': orionID
+        }
+    }).then(response => response.blob())
+        .then(blob => {
+            let audio = document.getElementById('audio');
+            audio.src = URL.createObjectURL(blob);
+            audio.preload = 'none';
+            audio.play();
+
+            // When the audio has finished playing, play the next audio file
+            audio.onended = function() {
+                playAudioFilesSequentially(index + 1);
             };
-        });
+        }
+    ).catch(error => {
+        console.error('Error:', error);
+        alert('Failed to play audio: ' + error);
+    } );
 }
 
 // Add event listener to text input to send message on pressing enter
@@ -174,6 +180,57 @@ function processCodeBlocks(newMessage)
     }
 }
 
+// Function to create html element for an orion message
+function createOrionMessage(message)
+{
+    // Create a new div element for the message-container
+    var messageContainer = document.createElement('div');
+    messageContainer.className = 'message-container';
+
+    // Create a new div element for the image of the speaker
+    var image = document.createElement('img');
+    image.src = 'orion.svg';
+    image.alt = 'Orion';
+    image.className = 'image';
+
+    // Create a new div element for the message
+    var messageDiv = document.createElement('div');
+    messageDiv.className = 'orion-message';
+    messageDiv.innerHTML = message;
+
+    // Add the image and message to the message-container
+    messageContainer.appendChild(image);
+    messageContainer.appendChild(messageDiv);
+
+    return messageContainer;
+}
+
+// Function to create html element for a user message
+function createUserMessage(message)
+{
+    // Create a new div element for the message-container
+    var messageContainer = document.createElement('div');
+    messageContainer.className = 'message-container';
+
+    // Create a new div element for the image of the speaker
+    var image = document.createElement('img');
+    image.src = 'user.svg';
+    image.alt = 'User';
+    image.className = 'image';
+
+    // Create a new div element for the message
+    var messageDiv = document.createElement('div');
+    messageDiv.className = 'user-message';
+    messageDiv.innerHTML = message;
+
+    // Add the image and message to the message-container
+    messageContainer.appendChild(image);
+    messageContainer.appendChild(messageDiv);
+
+    return messageContainer;
+}
+
+// Function to add a message to the chat area
 async function addMessageToChat(message, files)
 {
     if (message.trim() !== '')
@@ -191,11 +248,20 @@ async function addMessageToChat(message, files)
         })
         .then(response => response.text())
         .then(markdown => {
-            var newMessage = document.createElement('div');
-            newMessage.innerHTML = markdown;
+            var chatArea = document.getElementById('chat-area');
+
+            // Create a new message for the user
+            var newMessage = createUserMessage(markdown);
+
+            // Add the new message to the chat area
             chatArea.appendChild(newMessage);
+
+            // Process the new message for code blocks and add copy buttons
             processCodeBlocks(newMessage);
+
+            // Scroll to the bottom of the chat area
             chatArea.scrollTop = chatArea.scrollHeight;
+
         }).catch(error => {
             console.error('Error:', error);
             alert('Failed to convert message to markdown: ' + error);
@@ -212,10 +278,11 @@ async function addMessageToChat(message, files)
         }).then(response => response.text())
         .then(message => {
             var chatArea = document.getElementById('chat-area');
-            var newMessage = document.createElement('div');
+
+            // Create a new message for orion
+            var newMessage = createOrionMessage(message);
 
             // Add the new message to the chat area
-            newMessage.innerHTML = message;
             chatArea.appendChild(newMessage);
 
             // Process the new message for code blocks and add copy buttons
