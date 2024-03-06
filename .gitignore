@@ -8,3 +8,5 @@
 build/
 src/generated/**
 index_preview.html
+embeddings.py
+user-info.json
