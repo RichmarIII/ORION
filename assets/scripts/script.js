@@ -185,7 +185,7 @@ function createOrionMessage(message)
 {
     // Create a new div element for the message-container
     var messageContainer = document.createElement('div');
-    messageContainer.className = 'message-container';
+    messageContainer.className = 'orion-message-container';
 
     // Create a new div element for the image of the speaker
     var image = document.createElement('img');
@@ -195,7 +195,7 @@ function createOrionMessage(message)
 
     // Create a new div element for the message
     var messageDiv = document.createElement('div');
-    messageDiv.className = 'orion-message';
+    messageDiv.className = 'message';
     messageDiv.innerHTML = message;
 
     // Add the image and message to the message-container
@@ -210,7 +210,7 @@ function createUserMessage(message)
 {
     // Create a new div element for the message-container
     var messageContainer = document.createElement('div');
-    messageContainer.className = 'message-container';
+    messageContainer.className = 'user-message-container';
 
     // Create a new div element for the image of the speaker
     var image = document.createElement('img');
@@ -220,7 +220,7 @@ function createUserMessage(message)
 
     // Create a new div element for the message
     var messageDiv = document.createElement('div');
-    messageDiv.className = 'user-message';
+    messageDiv.className = 'message';
     messageDiv.innerHTML = message;
 
     // Add the image and message to the message-container
