@@ -1,0 +1,12 @@
+@import url('styles.css');
+@import url('login.css');
+
+/* Add additional styling as needed */
+/* Login Page */
+#register-form {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    margin: auto;
+    text-align: center;
+}

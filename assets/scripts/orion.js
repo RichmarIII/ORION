@@ -28,7 +28,7 @@ document.addEventListener('touchstart', function()
 
 async function playAudioFilesSequentially(index = 0)
 {
-    const orionID = localStorage.getItem('orion_id');
+    const orionID = localStorage.getItem('user_id');
 
     const speechEndpoint = '/speech/' + index;
 
@@ -36,7 +36,7 @@ async function playAudioFilesSequentially(index = 0)
     await fetch(speechEndpoint, {
         method: 'GET',
         headers: {
-            'X-Orion-Id': orionID
+            'X-User-Id': orionID
         }
     }).then(response => response.blob())
         .then(blob => {
@@ -78,69 +78,9 @@ document.getElementById('new-chat-button').addEventListener('click', function()
     alert('New chat functionality to be implemented');
 });
 
-// On load, check if the browser supports Server-Sent Events
 document.addEventListener('DOMContentLoaded', function()
 {
-    // Check if the browser supports Server-Sent Events
-    if (!!window.EventSource)
-    {
-        var source = new EventSource('/events');
-
-        // Listen for "ai_message_ready" events. data is a json object containing the message. Format of the json object is {message: 'message'}
-        source.addEventListener('ai_message_ready', function(e)
-        {
-            console.log('ai_message_ready', e.data);
-        },false);
-    }
-    else
-    {
-        console.log("Your browser does not support Server-Sent Events.");
-    }
-
-    // Check for existing Orion ID in the local storage
-    var orion_id = localStorage.getItem('orion_id');
-    if (orion_id)
-    {
-        console.log('Orion ID found in local storage:', orion_id);
-    }
-    else
-    {
-        console.log('No Orion ID found in local storage');
-    }
-
-    if (orion_id)
-    {
-        // Orion ID needs to be sent to the server via query parameter
-        // Fetch the Orion details from the server
-        fetch('/create_orion?id=' + orion_id, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        }).then(response => response.json()).then(data => {
-            console.log('Orion details:', data);
-            localStorage.setItem('orion_id', data.id);
-        }).catch(error => {
-            console.error('Error:', error);
-            alert('Failed to get Orion details: ' + error);
-        });
-    }
-    else
-    {
-        // Fetch the Orion details from the server
-        fetch('/create_orion', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        }).then(response => response.json()).then(data => {
-            console.log('Orion details:', data);
-            localStorage.setItem('orion_id', data.id);
-        }).catch(error => {
-            console.error('Error:', error);
-            alert('Failed to get Orion details: ' + error);
-        });
-    }
+    
 });
 
 // Function to process the newly added message for code blocks and add copy buttons
@@ -272,7 +212,7 @@ async function addMessageToChat(message, files)
             method: 'POST',
             headers: {
                 'Content-Type': 'text/plain',
-                'X-Orion-Id': localStorage.getItem('orion_id')
+                'X-User-Id': localStorage.getItem('user_id')
             },
             body: message
         }).then(response => response.text())
@@ -296,7 +236,7 @@ async function addMessageToChat(message, files)
                 method: 'POST',
                 headers: {
                     'Content-Type': 'text/plain',
-                    'X-Orion-Id': localStorage.getItem('orion_id')
+                    'X-User-Id': localStorage.getItem('user_id')
                 },
                 body: message
             }).then(response =>

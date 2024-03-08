@@ -10,13 +10,17 @@
 #include "tools/WebSearchFunctionTool.hpp"
 #include "tools/ListSmartDevicesFunctionTool.hpp"
 #include "tools/ExecSmartDeviceServiceFunctionTool.hpp"
+#include "MimeTypes.hpp"
+#include "User.hpp"
+#include "GUID.hpp"
 
 #include <cmark.h>
 
 #include <cpprest/filestream.h>
-#include <MimeTypes.hpp>
 
 #include <filesystem>
+
+#include <sqlite_modern_cpp.h>
 
 using namespace ORION;
 
@@ -121,9 +125,13 @@ void OrionWebServer::HandleRequest(web::http::http_request Request)
     {
         HandleSpeakEndpoint(Request);
     }
-    else if (Path == U("/create_orion"))
+    else if (Path == U("/login"))
     {
-        HandleCreateOrionEndpoint(Request);
+        HandleLoginEndpoint(Request);
+    }
+    else if (Path == U("/register"))
+    {
+        HandleRegisterEndpoint(Request);
     }
     else if (Path.find(U("/speech/")) != std::string::npos)
     {
@@ -137,19 +145,28 @@ void OrionWebServer::HandleRequest(web::http::http_request Request)
 
 void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
 {
-    // Check for the X-Orion-Id header
-    if (!Request.headers().has(U("X-Orion-Id")))
+    // Check for the X-User-Id header
+    if (!Request.headers().has(U("X-User-Id")))
     {
-        Request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
+        Request.reply(web::http::status_codes::BadRequest, U("The X-User-Id header is required."));
         return;
     }
 
     // Get the Orion instance id from the header
-    auto OrionID = Request.headers().find(U("X-Orion-Id"))->second;
+    const auto USER_ID = Request.headers().find(U("X-User-Id"))->second;
+
+    // Find User in the list of logged in users
+    const auto USER_ITER =
+        std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
+    if (USER_ITER == m_LoggedInUsers.end())
+    {
+        Request.reply(web::http::status_codes::Unauthorized, U("User is not logged in."));
+        return;
+    }
 
     // Find the Orion instance with the given id
     auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
-                                [OrionID](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == OrionID; });
+                                [USER_ITER](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == USER_ITER->OrionID; });
 
     // Check if the Orion instance was found
     if (OrionIt == m_OrionInstances.end())
@@ -247,13 +264,19 @@ void OrionWebServer::HandleAssetFileEndpoint(web::http::http_request Request)
 void OrionWebServer::HandleSpeechAssetFileEndpoint(web::http::http_request Request)
 {
     // Get Orion ID from the request header
-    const auto ORION_ID {Request.headers().find(U("X-Orion-Id"))->second};
+    const auto USER_ID {Request.headers().find(U("X-User-Id"))->second};
 
-    if (ORION_ID.empty())
+    if (USER_ID.empty())
     {
-        Request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
+        Request.reply(web::http::status_codes::BadRequest, U("The X-User-Id header is required."));
         return;
     }
+
+    // Find the Logged in user
+    const auto USER_ITER =
+        std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
+
+    const auto ORION_ID = USER_ITER->OrionID;
 
     // get the audio format from the query parameter
     std::string AudioFormat = "mp3";
@@ -348,19 +371,28 @@ void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request Request)
 
 void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
 {
-    // Check for the X-Orion-Id header
-    if (!Request.headers().has(U("X-Orion-Id")))
+    // Check for the X-User-Id header
+    if (!Request.headers().has(U("X-User-Id")))
     {
-        Request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
+        Request.reply(web::http::status_codes::BadRequest, U("The X-User-Id header is required."));
         return;
     }
 
     // Get the Orion instance id from the header
-    auto OrionID = Request.headers().find(U("X-Orion-Id"))->second;
+    const auto USER_ID = Request.headers().find(U("X-User-Id"))->second;
+
+    // Find User in the list of logged in users
+    const auto USER_ITER =
+        std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
+    if (USER_ITER == m_LoggedInUsers.end())
+    {
+        Request.reply(web::http::status_codes::Unauthorized, U("User is not logged in."));
+        return;
+    }
 
     // Find the Orion instance with the given id
     auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
-                                [OrionID](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == OrionID; });
+                                [USER_ITER](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == USER_ITER->OrionID; });
 
     // Check if the Orion instance was found
     if (OrionIt == m_OrionInstances.end())
@@ -395,19 +427,28 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
 
 void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
 {
-    // Check for the X-Orion-Id header
-    if (!Request.headers().has(U("X-Orion-Id")))
+    // Check for the X-User-Id header
+    if (!Request.headers().has(U("X-User-Id")))
     {
-        Request.reply(web::http::status_codes::BadRequest, U("The X-Orion-Id header is required."));
+        Request.reply(web::http::status_codes::BadRequest, U("The X-User-Id header is required."));
         return;
     }
 
     // Get the Orion instance id from the header
-    auto OrionID = Request.headers().find(U("X-Orion-Id"))->second;
+    const auto USER_ID = Request.headers().find(U("X-User-Id"))->second;
+
+    // Find User in the list of logged in users
+    const auto USER_ITER =
+        std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
+    if (USER_ITER == m_LoggedInUsers.end())
+    {
+        Request.reply(web::http::status_codes::Unauthorized, U("User is not logged in."));
+        return;
+    }
 
     // Find the Orion instance with the given id
     auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
-                                [OrionID](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == OrionID; });
+                                [USER_ITER](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == USER_ITER->OrionID; });
 
     // Check if the Orion instance was found
     if (OrionIt == m_OrionInstances.end())
@@ -457,20 +498,8 @@ void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
             });
 }
 
-void OrionWebServer::HandleCreateOrionEndpoint(web::http::http_request Request)
+const Orion& OrionWebServer::InstantiateOrionInstance(const std::string& ExistingOrionInstanceID)
 {
-    // Get the Orion instance id from the query parameter "id"
-    auto Query   = Request.request_uri().query();
-    auto OrionID = std::string();
-    if (!Query.empty())
-    {
-        auto QueryParams = web::http::uri::split_query(web::http::uri::decode(Query));
-        if (QueryParams.find(U("id")) != QueryParams.end())
-        {
-            OrionID = utility::conversions::to_utf8string(QueryParams.at(U("id")));
-        }
-    }
-
     // Create a new Orion instance
 
     // Declare Default Tools
@@ -488,16 +517,185 @@ void OrionWebServer::HandleCreateOrionEndpoint(web::http::http_request Request)
     Tools.push_back(std::make_unique<ListSmartDevicesFunctionTool>());
     Tools.push_back(std::make_unique<ExecSmartDeviceServiceFunctionTool>());
 
+    // Check if the Orion instance already exists locally (Only one Orion instance is allowed per user)
+    auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
+                                [ExistingOrionInstanceID](const std::unique_ptr<Orion>& Orion)
+                                { return Orion->GetCurrentAssistantID() == ExistingOrionInstanceID; });
+
+    // Check if the Orion instance was found locally
+    if (OrionIt != m_OrionInstances.end())
+    {
+        return **OrionIt;
+    }
+
     // Create the Orion instance
-    auto NewOrion = std::make_unique<Orion>(OrionID, std::move(Tools));
+    auto NewOrion = std::make_unique<Orion>(ExistingOrionInstanceID, std::move(Tools));
 
     // Initialize the Orion instance
     NewOrion->Initialize();
-    OrionID = NewOrion->GetCurrentAssistantID();
+
+    auto& OrionInstance = *NewOrion;
 
     // Add the Orion instance to the list
     m_OrionInstances.push_back(std::move(NewOrion));
 
-    // Send the response
-    Request.reply(web::http::status_codes::OK, web::json::value::parse(U("{ \"id\": \"") + OrionID + U("\" }")));
+    return OrionInstance;
+}
+
+void OrionWebServer::HandleLoginEndpoint(web::http::http_request Request)
+{
+    // Get the username and password from the request body
+    Request.extract_json()
+        .then([this, Request](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+        .then(
+            [this, Request](web::json::value JsonRequestBody)
+            {
+                // Get the username and password from the request body
+                auto Username = JsonRequestBody.has_field(U("username")) ? JsonRequestBody.at(U("username")).as_string() : U("");
+                auto Password = JsonRequestBody.has_field(U("password")) ? JsonRequestBody.at(U("password")).as_string() : U("");
+                auto UserID   = JsonRequestBody.has_field(U("user_id")) ? JsonRequestBody.at(U("user_id")).as_string() : U("");
+
+                // Get the database path
+                const auto DB_PATH = std::filesystem::path(AssetDirectories::DATABASE_FILE);
+
+                // Create directory if it does not exist
+                std::filesystem::create_directories(DB_PATH.parent_path());
+
+                // Open the database
+                sqlite::database DB {DB_PATH.string()};
+
+                User Usr {};
+
+                // Create the users table if it does not exist with the user_id, orion_id, username, and password columns.
+                DB << "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, orion_id TEXT, username TEXT, password TEXT);";
+
+                // Convert the username to lowercase
+                std::transform(Username.begin(), Username.end(), Username.begin(), ::tolower);
+
+                // Check if the username already exists
+                int UserCount = 0;
+                DB << "SELECT COUNT(*) FROM users WHERE username = ? OR user_id = ?;" << Username << UserID >> UserCount;
+
+                if (UserCount <= 0)
+                {
+                    web::json::value Response = web::json::value::object();
+                    Response[U("message")]    = web::json::value::string(U("The user does not exist."));
+                    Request.reply(web::http::status_codes::BadRequest, Response);
+                    return;
+                }
+
+                // Get the user_id and orion_id from the database if the username and password are valid OR if the user_id is valid
+                DB << "SELECT user_id,orion_id FROM users WHERE (username = ? AND password = ?) OR user_id = ?;" << Username << Password << UserID >>
+                    [&Usr](std::string IDArg, std::string OrionIDArg) {
+                        Usr = {IDArg, OrionIDArg};
+                    };
+
+                // Send the response
+                if (Usr)
+                {
+                    // Check if user is already logged in
+                    const auto USER_ITER =
+                        std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [Usr](const User& User) { return User.UserID == Usr.UserID; });
+
+                    if (USER_ITER != m_LoggedInUsers.end())
+                    {
+                        web::json::value Response = web::json::value::object();
+                        Response[U("user_id")]    = web::json::value::string(Usr.UserID);
+                        Request.reply(web::http::status_codes::OK, Response);
+                        return;
+                    }
+
+                    // Instantiate the Orion instance for the user
+                    InstantiateOrionInstance(Usr.OrionID);
+
+                    m_LoggedInUsers.push_back(Usr);
+
+                    web::json::value Response = web::json::value::object();
+                    Response[U("user_id")]    = web::json::value::string(Usr.UserID);
+                    Request.reply(web::http::status_codes::OK, Response);
+                }
+                else
+                {
+                    web::json::value Response = web::json::value::object();
+                    Response[U("message")]    = web::json::value::string(U("Invalid username or password."));
+                    Request.reply(web::http::status_codes::Unauthorized, Response);
+                }
+            });
+}
+
+void OrionWebServer::HandleRegisterEndpoint(web::http::http_request Request)
+{
+    // Get the username and password from the request body
+    Request.extract_json()
+        .then([this, Request](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+        .then(
+            [this, Request](web::json::value JsonRequestBody)
+            {
+                // Get the username and password from the request body
+                auto Username = JsonRequestBody.at(U("username")).as_string();
+                auto Password = JsonRequestBody.at(U("password")).as_string();
+
+                // Check if the username and password are empty
+                if (Username.empty() || Password.empty())
+                {
+                    web::json::value Response = web::json::value::object();
+                    Response[U("message")]    = web::json::value::string(U("The username and password are required."));
+                    Request.reply(web::http::status_codes::BadRequest, Response);
+                    return;
+                }
+
+                // Get the database path
+                const auto DB_PATH = std::filesystem::path(AssetDirectories::DATABASE_FILE);
+
+                // Create directory if it does not exist
+                std::filesystem::create_directories(DB_PATH.parent_path());
+
+                // Open the database
+                sqlite::database DB {DB_PATH.string()};
+
+                // Create the users table if it does not exist with the user_id, orion_id, username, and password columns.
+                DB << "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, orion_id TEXT, username TEXT, password TEXT);";
+
+                // Convert the username to lowercase
+                std::transform(Username.begin(), Username.end(), Username.begin(), ::tolower);
+
+                // Check if the username already exists
+                int UserCount = 0;
+                DB << "SELECT COUNT(*) FROM users WHERE username = ?;" << Username >> UserCount;
+
+                if (UserCount > 0)
+                {
+                    web::json::value Response = web::json::value::object();
+                    Response[U("message")]    = web::json::value::string(U("The username already exists."));
+                    Request.reply(web::http::status_codes::Conflict, Response);
+                    return;
+                }
+
+                // Instantiate the Orion instance for the user
+                const auto& ORION = InstantiateOrionInstance();
+
+                // Get the orion id
+                const auto ORION_ID = ORION.GetCurrentAssistantID();
+
+                // Generate a guid for the user id using custom
+                const std::string USER_ID = GUID::Generate();
+
+                if (USER_ID.empty() || ORION_ID.empty())
+                {
+                    web::json::value Response = web::json::value::object();
+                    Response[U("message")]    = web::json::value::string(U("An internal error occurred."));
+                    Request.reply(web::http::status_codes::InternalError, Response);
+                    return;
+                }
+
+                // Insert the user into the database
+                DB << "INSERT INTO users (user_id, orion_id, username, password) VALUES (?, ?, ?, ?);" << USER_ID << ORION_ID << Username << Password;
+
+                m_LoggedInUsers.push_back({USER_ID, ORION_ID});
+
+                // Send the response
+                web::json::value Response = web::json::value::object();
+                Response[U("user_id")]    = web::json::value::string(USER_ID);
+                Request.reply(web::http::status_codes::OK, Response);
+            });
 }

@@ -14,9 +14,6 @@ set(CMAKE_CXX_CLANG_TIDY
   -header-filter=${CMAKE_CURRENT_SOURCE_DIR};
 )
 
-# Include directory for header files
-include_directories(include)
-
 # List all the asset files to watch for changes. changing any of these files will trigger the post-build copy assets command
 # which will copy all the assets to the executable directory
 # use file(GLOB_RECURSE ASSETS "${CMAKE_SOURCE_DIR}/assets/*") to include all files in the assets directory
@@ -52,6 +49,7 @@ set(SOURCES
     src/tools/ListSmartDevicesFunctionTool.cpp
     src/tools/ExecSmartDeviceServiceFunctionTool.cpp
     src/MimeTypes.cpp
+    src/GUID.cpp
 
     ${ASSETS_CPP_FILE} # This is the generated .cpp file to trigger post-build copy assets command
 )
@@ -62,8 +60,13 @@ add_executable(ORION ${SOURCES})
 # If you need to link against libraries, do so here
 find_package(cpprestsdk CONFIG REQUIRED)
 find_package(cmark CONFIG REQUIRED)
+find_path(SQLITE_MODERN_CPP_INCLUDE_DIRS "sqlite_modern_cpp.h")
+find_package(unofficial-sqlite3 CONFIG REQUIRED)
 
-target_link_libraries(ORION PRIVATE cpprestsdk::cpprest cpprestsdk::cpprestsdk_zlib_internal cpprestsdk::cpprestsdk_boost_internal cpprestsdk::cpprestsdk_openssl_internal cmark::cmark_static)
+# Include directorys for header files
+target_include_directories(ORION PRIVATE include ${SQLITE_MODERN_CPP_INCLUDE_DIRS} )
+
+target_link_libraries(ORION PRIVATE cpprestsdk::cpprest cpprestsdk::cpprestsdk_zlib_internal cpprestsdk::cpprestsdk_boost_internal cpprestsdk::cpprestsdk_openssl_internal cmark::cmark_static unofficial::sqlite3::sqlite3)
 
 # Copy the files to the executable directory recursively
 add_custom_command(TARGET ORION POST_BUILD

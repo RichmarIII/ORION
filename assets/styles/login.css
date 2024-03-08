@@ -1,0 +1,55 @@
+@import url('styles.css');
+
+#wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+
+/* Add additional styling as needed */
+/* Login Page */
+#login-form {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    margin: auto;
+    text-align: center;
+}
+
+.input-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    width: auto;
+    margin: auto;
+    padding: 10px;
+    flex-direction: column;
+}
+
+#title {
+    font-size: 64px;
+    text-shadow: #222 4px 4px;
+}
+
+#sub-title {
+    font-size: 32px;
+    text-shadow: #222 3px 3px;
+    margin-bottom: 25px;
+}
+
+label {
+    text-shadow: #222 2px 2px;
+    font-size: 24px;
+}
+
+a {
+    font-weight: bolder;
+    color: #456;
+}
+
+/* a hover effect */
+a:hover {
+    color: #654;
+}

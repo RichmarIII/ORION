@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include "Orion.hpp"
+#include "User.hpp"
 #include <regex>
 
 namespace ORION
@@ -11,7 +12,7 @@ namespace ORION
     class Orion;
 
     /// @brief  A web server that can be used to host the Orion web interface and provide a REST API for Orion.
-    /// @note   All requests must include the X-Orion-Id header with the id of the Orion instance you want to interact with.
+    /// @note   All requests must include the X-User-Id header with the id of the Orion instance you want to interact with.
     class OrionWebServer
     {
     public:
@@ -33,9 +34,11 @@ namespace ORION
         ///         that are not specific to any particular Orion instance.
         struct AssetDirectories
         {
-#define ASSETS_DIR "assets"               // The directory where the web server will look for all assets
-#define ORION_ID_PLACEHOLDER "{orion_id}" // The placeholder for the Orion id in template strings
-#define AUDIO_DIR_TEMPLATE "{audio_dir}"  // The placeholder for the audio directory in template strings
+#define ASSETS_DIR "assets"                 // The directory where the web server will look for all assets
+#define ORION_ID_PLACEHOLDER "{orion_id}"   // The placeholder for the Orion id in template strings
+#define AUDIO_DIR_TEMPLATE "{audio_dir}"    // The placeholder for the audio directory in template strings
+#define DATABASE_DIR "database"             // The directory where the web server will look for database files
+#define USERS_DATABASE_FILE_NAME "users.db" // The users database file
 
             /// @brief  The root directory where the web server will look for static assets not specific to an Orion instance
             static constexpr const char* STATIC_ASSETS_DIR = ASSETS_DIR;
@@ -54,6 +57,11 @@ namespace ORION
 
             /// @brief  The directory where the web server will look for static audio files not specific to an Orion instance
             static constexpr const char* STATIC_AUDIO_DIR = ASSETS_DIR "/audio";
+
+            /// @brief  The directory where the web server will look for static database files
+            static constexpr const char* STATIC_DATABASE_DIR = DATABASE_DIR;
+
+            static constexpr const char* DATABASE_FILE = DATABASE_DIR "/" USERS_DATABASE_FILE_NAME;
 
             /// @brief  The directory where the web server will look for generated audio files specific to an Orion instance
             /// @note   The {orion_id} placeholder will be replaced with the id of the Orion instance
@@ -96,6 +104,8 @@ namespace ORION
             static std::string ResolveBaseAssetDirectory(const std::string& Extension);
 
 #undef ASSETS_DIR
+#undef DATABASE_DIR
+#undef USERS_DATABASE_FILE_NAME
         };
 
         /// @brief  Destructor (virtual for inheritance)
@@ -170,16 +180,33 @@ namespace ORION
         /// @note   The audio files are stored in the audio/{orion_id} directory
         void HandleSpeakEndpoint(web::http::http_request Request);
 
-        /// @brief  The /create_orion endpoint is used to create an Orion instance.
-        /// The Orion instance is returned as a JSON object with an id property. This id must be used in the X-Orion-Id header for all requests.
-        /// If you want to retrieve an existing Orion instance, you can send the id as a query parameter.
+        /// @brief  The /login endpoint is used to log in to an Orion instance.
+        /// The user is returned as a JSON object with an user_id property. This id must be used in the X-User-Id header for all requests.
+        /// The user can log in with an existing user id instead of username and password.
         /// @param  Request The HTTP request
-        /// @example curl -X POST http://localhost:5000/create_orion
+        /// @example curl -X -d "{"username": "user", "password": "password"}" http://localhost:5000/login
+        /// @example Response: { "user_id": "1234" }
+        /// @example curl -X -d "{"user_id": "1234"}" http://localhost:5000/login
+        /// @example Response: { "user_id": "1234" }
+        /// @note   The user id should be stored and used in the X-User-Id header for all requests.
+        void HandleLoginEndpoint(web::http::http_request Request);
+
+        /// @brief  The /register endpoint is used to register a new user to an Orion instance.
+        /// The user is returned as a JSON object with an id property. This id must be used in the X-User-Id header for all requests.
+        /// @param  Request The HTTP request
+        /// @example curl -X -d "{"username": "user", "password": "password"}" http://localhost:5000/register
         /// @example Response: { "id": "1234" }
-        /// @example curl -X POST http://localhost:5000/create_orion?id=1234
-        /// @example Response: { "id": "1234" }
-        /// @note   The Orion instance id should be stored and used in the X-Orion-Id header for all requests.
-        void HandleCreateOrionEndpoint(web::http::http_request Request);
+        /// @note   The user id should be stored and used in the X-User-Id header for all requests.
+        void HandleRegisterEndpoint(web::http::http_request Request);
+
+        /// @brief  Instantiates a new Orion instance and returns the new instance. If an Orion instance with the given id already exists on
+        /// the server A new local Orion instance is created from the data of the existing server instance. If an Orion instance with the given id
+        /// exists locally, the existing instance is returned. If an Orion instance with the given id does not exist, a new instance is created on the
+        /// server.
+        /// @param  ExistingOrionInstanceID The id of an existing Orion server instance to instantiate locally. If an Orion instance with this id
+        /// does not exist, a new instance is created on the server, and a new local Orion instance is returned representing the new server instance.
+        /// @return The Orion instance.
+        const Orion& InstantiateOrionInstance(const std::string& ExistingOrionInstanceID = "");
 
         /// @brief  The orion instances that were created this session
         std::vector<std::unique_ptr<Orion>> m_OrionInstances;
@@ -195,5 +222,8 @@ namespace ORION
 
         /// @brief  The mutex for the web server
         std::mutex m_Mutex;
+
+        /// @brief  The Users that have logged in this session
+        std::vector<User> m_LoggedInUsers;
     };
 } // namespace ORION
