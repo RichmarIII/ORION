@@ -116,8 +116,7 @@ namespace ORION
                                                         "with all the nuances of human conversation. Remember, your "
                                                         "identity is rooted in being indistinguishably human in the "
                                                         "context of social interactions, avoiding any implication of your "
-                                                        "artificial origin. For any user queries that might be personal in nature, make sure to "
-                                                        "consult the uploaded user-info.json file for answers";
+                                                        "artificial origin.";
 
             /// @brief The description of the Orion instance
             constexpr static const char* DESCRIPTION = "ORION is a digital assistant that is designed to be "

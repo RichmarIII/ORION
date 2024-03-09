@@ -629,7 +629,14 @@ pplx::task<web::json::value> Orion::GetChatHistoryAsync()
 {
     // Create a new http_request to get the chat history
     web::http::http_request ListMessagesRequest(web::http::methods::GET);
-    ListMessagesRequest.set_request_uri(U("threads/" + m_CurrentThreadID + "/messages"));
+
+    // Request uri builder
+    web::uri_builder ListMessagesRequestURIBuilder;
+    ListMessagesRequestURIBuilder.append_path("threads/" + m_CurrentThreadID + "/messages");
+    ListMessagesRequestURIBuilder.append_query("limit", 100);
+    ListMessagesRequestURIBuilder.append_query("order", "asc");
+    ListMessagesRequest.set_request_uri(ListMessagesRequestURIBuilder.to_string());
+
     ListMessagesRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
     ListMessagesRequest.headers().add("OpenAI-Beta", "assistants=v1");
 
@@ -650,7 +657,7 @@ pplx::task<web::json::value> Orion::GetChatHistoryAsync()
                             {
                                 auto JData = ListMessagesResponseDataJson.at("data").as_array();
 
-                                auto JChatHistory = web::json::value::object();
+                                auto JChatHistory = web::json::value::array();
                                 for (const auto& Message : JData)
                                 {
                                     // Our assistant is always the orion role in the chat history
@@ -673,7 +680,7 @@ pplx::task<web::json::value> Orion::GetChatHistoryAsync()
 
                                             auto JMessage       = web::json::value::object();
                                             JMessage["message"] = web::json::value::string(Message);
-                                            JMessage["role"]    = web::json::value::string("orion");
+                                            JMessage["role"]    = web::json::value::string(Role);
 
                                             // Add the message to the chat history
                                             JChatHistory[JChatHistory.size()] = JMessage;

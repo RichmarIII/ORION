@@ -179,11 +179,13 @@ void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
     const bool IS_MARKDOWN_REQUESTED = Request.request_uri().query().find(U("markdown=true")) != std::string::npos;
 
     // Get the message from the request body
-    Request.extract_string()
-        .then([](pplx::task<std::string> ExtractJsonTask) { return ExtractJsonTask.get(); })
+    Request.extract_json()
+        .then([](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
         .then(
-            [OrionIt, IS_MARKDOWN_REQUESTED, Request](std::string RequestMessage)
+            [OrionIt, IS_MARKDOWN_REQUESTED, Request](web::json::value RequestMessageJson)
             {
+                // Get the message from the request body
+                auto RequestMessage = RequestMessageJson.at(U("message")).as_string();
                 (*OrionIt)
                     ->SendMessageAsync(RequestMessage)
                     .then([](pplx::task<std::string> SendMessageTask) { return SendMessageTask.get(); })
@@ -198,8 +200,11 @@ void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
                                 free(pMarkdown);
                             }
 
+                            web::json::value SendMessageResponseJson = web::json::value::object();
+                            SendMessageResponseJson[U("message")]    = web::json::value::string(SendMessageResponse);
+
                             // Send the response
-                            Request.reply(web::http::status_codes::OK, SendMessageResponse);
+                            Request.reply(web::http::status_codes::OK, SendMessageResponseJson);
                         });
             });
 }
@@ -341,31 +346,26 @@ void OrionWebServer::HandleSpeechAssetFileEndpoint(web::http::http_request Reque
 void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request Request)
 {
     // Get the message from the request body
-    Request.extract_string()
-        .then([this, Request](pplx::task<std::string> ExtractJsonTask) { return ExtractJsonTask.get(); })
+    Request.extract_json()
+        .then([this, Request](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
         .then(
-            [this, Request](std::string RequestMessage)
+            [this, Request](web::json::value JsonRequestBody)
             {
+                // Get the message from the request body
+                auto RequestMessage = JsonRequestBody.at(U("message")).as_string();
+
                 // Convert the message to markdown
-                auto        pMarkdown = cmark_markdown_to_html(RequestMessage.c_str(), RequestMessage.length(), CMARK_OPT_UNSAFE);
-                std::string Markdown  = pMarkdown;
-                free(pMarkdown);
+                {
+                    auto pMarkdown = cmark_markdown_to_html(RequestMessage.c_str(), RequestMessage.length(), CMARK_OPT_UNSAFE);
+                    RequestMessage = pMarkdown;
+                    free(pMarkdown);
+                }
+
+                web::json::value Response = web::json::value::object();
+                Response[U("message")]    = web::json::value::string(RequestMessage);
 
                 // Send the response
-                Request.reply(web::http::status_codes::OK, Markdown)
-                    .then(
-                        [this](pplx::task<void> ReplyTask)
-                        {
-                            try
-                            {
-                                ReplyTask.get();
-                            }
-                            catch (std::exception& Exception)
-                            {
-                                std::cerr << Exception.what() << std::endl;
-                                std::cout << Exception.what() << std::endl;
-                            }
-                        });
+                Request.reply(web::http::status_codes::OK, Response);
             });
 }
 
@@ -374,7 +374,9 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
     // Check for the X-User-Id header
     if (!Request.headers().has(U("X-User-Id")))
     {
-        Request.reply(web::http::status_codes::BadRequest, U("The X-User-Id header is required."));
+        web::json::value Response = web::json::value::object();
+        Response[U("message")]    = web::json::value::string(U("The X-User-Id header is required."));
+        Request.reply(web::http::status_codes::BadRequest, Response);
         return;
     }
 
@@ -386,7 +388,9 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
         std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
     if (USER_ITER == m_LoggedInUsers.end())
     {
-        Request.reply(web::http::status_codes::Unauthorized, U("User is not logged in."));
+        web::json::value Response = web::json::value::object();
+        Response[U("message")]    = web::json::value::string(U("User is not logged in."));
+        Request.reply(web::http::status_codes::Unauthorized, Response);
         return;
     }
 
@@ -397,13 +401,15 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
     // Check if the Orion instance was found
     if (OrionIt == m_OrionInstances.end())
     {
-        Request.reply(web::http::status_codes::BadRequest, U("The Orion instance with the given id was not found."));
+        web::json::value Response = web::json::value::object();
+        Response[U("message")]    = web::json::value::string(U("Could not find an Orion instance for the given user."));
+        Request.reply(web::http::status_codes::BadRequest, Response);
         return;
     }
 
     // Get the chat history
     (*OrionIt)->GetChatHistoryAsync().then(
-        [this, &Request](web::json::value ChatHistory)
+        [this, Request](web::json::value ChatHistory)
         {
             // Check if the query parameter is present
             bool IsMarkdownRequested = Request.request_uri().query().find(U("markdown=true")) != std::string::npos;
@@ -416,6 +422,7 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
                     auto Message           = JMessage.at(U("message")).as_string();
                     auto pMarkdown         = cmark_markdown_to_html(Message.c_str(), Message.length(), CMARK_OPT_UNSAFE);
                     JMessage[U("message")] = web::json::value::string(pMarkdown);
+                    JMessage[U("role")]    = web::json::value::string(JMessage.at(U("role")).as_string() == U("user") ? U("user") : U("assistant"));
                     free(pMarkdown);
                 }
             }
@@ -458,10 +465,10 @@ void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
     }
 
     // Get the message from the request body
-    Request.extract_string()
-        .then([this, OrionIt, Request](pplx::task<std::string> ExtractJsonTask) { return ExtractJsonTask.get(); })
+    Request.extract_json()
+        .then([this, OrionIt, Request](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
         .then(
-            [this, OrionIt, Request](std::string RequestMessage)
+            [this, OrionIt, Request](web::json::value RequestMessageJson)
             {
                 // Get the audio format from the query parameter
                 ETTSAudioFormat AudioFormat = ETTSAudioFormat::MP3;
@@ -486,9 +493,11 @@ void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
                     AudioFormat = ETTSAudioFormat::Wav;
                 }
 
+                const auto REQUEST_MESSAGE = RequestMessageJson.at(U("message")).as_string();
+
                 // Make Orion speak the message
                 (*OrionIt)
-                    ->SpeakAsync(RequestMessage, AudioFormat)
+                    ->SpeakAsync(REQUEST_MESSAGE, AudioFormat)
                     .then(
                         [this, Request]()
                         {

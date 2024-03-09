@@ -61,7 +61,7 @@ namespace ORION
             /// @brief  The directory where the web server will look for static database files
             static constexpr const char* STATIC_DATABASE_DIR = DATABASE_DIR;
 
-            static constexpr const char* DATABASE_FILE = DATABASE_DIR "/" USERS_DATABASE_FILE_NAME;
+            static constexpr const char* DATABASE_FILE = ASSETS_DIR "/" DATABASE_DIR "/" USERS_DATABASE_FILE_NAME;
 
             /// @brief  The directory where the web server will look for generated audio files specific to an Orion instance
             /// @note   The {orion_id} placeholder will be replaced with the id of the Orion instance

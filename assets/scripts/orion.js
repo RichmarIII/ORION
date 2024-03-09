@@ -28,7 +28,7 @@ document.addEventListener('touchstart', function()
 
 async function playAudioFilesSequentially(index = 0)
 {
-    const orionID = localStorage.getItem('user_id');
+    const userID = localStorage.getItem('user_id');
 
     const speechEndpoint = '/speech/' + index;
 
@@ -36,7 +36,7 @@ async function playAudioFilesSequentially(index = 0)
     await fetch(speechEndpoint, {
         method: 'GET',
         headers: {
-            'X-User-Id': orionID
+            'X-User-Id': userID
         }
     }).then(response => response.blob())
         .then(blob => {
@@ -80,7 +80,62 @@ document.getElementById('new-chat-button').addEventListener('click', function()
 
 document.addEventListener('DOMContentLoaded', function()
 {
-    
+    // Get the user id from local storage
+    var userID = localStorage.getItem('user_id');
+    if (userID === null)
+    {
+        console.log('User not found in local storage');
+
+        // Redirect to the login page
+        window.location.href = '/login.html';
+    }
+
+    // Get the chat area
+    var chatArea = document.getElementById('chat-area');
+
+    // Fetch the chat messages from the server
+    fetch('/chat_history?markdown=true', {
+        method: 'GET',
+        headers: {
+            'X-User-Id': userID,
+            'Content-Type': 'text/plain charset=utf-8'
+        }
+    }).then(response => response.json())
+    .then(messages => {
+        var chatArea = document.getElementById('chat-area');
+
+        // Loop through the messages and add them to the chat area
+        for (var i = 0; i < messages.length; i++)
+        {
+            if (messages[i].role === 'user')
+            {
+                // Create a new message for the user
+                var newMessage = createUserMessage(messages[i].message);
+                // Add the new message to the chat area
+                chatArea.appendChild(newMessage);
+            }
+            else
+            {
+                // Create a new message for orion
+                var newMessage = createOrionMessage(messages[i].message);
+                // Add the new message to the chat area
+                chatArea.appendChild(newMessage);
+            }
+        }
+
+        // Process the new messages for code blocks and add copy buttons
+        var newMessages = chatArea.querySelectorAll('.orion-message-container');
+        newMessages.forEach(newMessage => {
+            processCodeBlocks(newMessage);
+        });
+
+        // Scroll to the bottom of the chat area
+        chatArea.scrollTop = chatArea.scrollHeight;
+
+    }).catch(error => {
+        console.error('Error:', error);
+        alert('Failed to fetch chat history: ' + error);
+    });
 });
 
 // Function to process the newly added message for code blocks and add copy buttons
@@ -178,17 +233,25 @@ async function addMessageToChat(message, files)
         let filesToPlay = [];
         var chatArea = document.getElementById('chat-area');
 
+        // create json object for the message
+        var jmessage = {
+            message: message,
+        };
+
         //Fetch markdown from the server
         await fetch('/markdown', {
             method: 'POST',
             headers: {
-                'Content-Type': 'text/plain'
+                'Content-Type': 'application/json'
             },
-            body: message
+            body: JSON.stringify(jmessage)
         })
-        .then(response => response.text())
-        .then(markdown => {
+        .then(response => response.json())
+        .then(jmarkdown => {
             var chatArea = document.getElementById('chat-area');
+
+            // get message from markdown
+            const markdown = jmarkdown.message;
 
             // Create a new message for the user
             var newMessage = createUserMessage(markdown);
@@ -211,13 +274,15 @@ async function addMessageToChat(message, files)
         await fetch('/send_message?markdown=true', {
             method: 'POST',
             headers: {
-                'Content-Type': 'text/plain',
+                'Content-Type': 'application/json',
                 'X-User-Id': localStorage.getItem('user_id')
             },
-            body: message
-        }).then(response => response.text())
-        .then(message => {
+            body: JSON.stringify(jmessage)
+        }).then(response => response.json())
+        .then(jmessage => {
             var chatArea = document.getElementById('chat-area');
+
+            const message = jmessage.message;
 
             // Create a new message for orion
             var newMessage = createOrionMessage(message);
@@ -235,10 +300,10 @@ async function addMessageToChat(message, files)
             fetch('/speak?format=mp3', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'text/plain',
+                    'Content-Type': 'application/json',
                     'X-User-Id': localStorage.getItem('user_id')
                 },
-                body: message
+                body: JSON.stringify(jmessage)
             }).then(response =>
             {
                 playAudioFilesSequentially();

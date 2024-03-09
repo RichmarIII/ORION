@@ -31,7 +31,15 @@ document.getElementById('login-form').addEventListener('submit', function(event)
     })
     .then(response => response.json())
     .then(data => {
-        console.log('Success:', data);
+
+        // check if user_id is in the response
+        if (!data.user_id) {
+            alert(data.message);
+            return;
+        }
+
+        // Save the user id to local storage
+        localStorage.setItem('user_id', data.user_id);
 
         // Navigate to the orion page
         window.location.href = '/orion.html';

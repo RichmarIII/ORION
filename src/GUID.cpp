@@ -21,8 +21,8 @@ GUID GUID::Generate()
     // UUID version 4 Variant 1
     std::stringstream GUIDStringStream;
 
-    // 8-4-4-4-12
-    GUIDStringStream << std::hex << std::setw(8) << TIME_SECONDS;
+    // 8-4-4-4-12.  Prevent empty GUIDs by setting the width of each field and filling with 0s
+    GUIDStringStream << std::hex << std::setfill('0') << std::setw(8) << TIME_SECONDS;
     GUIDStringStream << "-" << std::setw(4) << (TIME_SECONDS >> 32);
     GUIDStringStream << "-" << std::setw(4) << ((TIME_SECONDS >> 48) | 0x4000);          // The 4 in "4xxx" indicates the UUID version
     GUIDStringStream << "-" << std::setw(4) << (DISTRIBUTION(RandomGenerator) | 0x8000); // The 8 in "8xxx" indicates the variant
