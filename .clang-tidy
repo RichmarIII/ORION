@@ -34,6 +34,8 @@ CheckOptions:
     value: p
   - key: readability-identifier-naming.ConstantPointerParameterPrefix
     value: p
+  - key: readability-identifier-naming.ConstantPointerPrefix
+    value: p
   - key: readability-identifier-naming.LocalVariableCase
     value: CamelCase
   - key: readability-identifier-naming.MacroDefinitionCase

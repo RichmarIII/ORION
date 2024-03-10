@@ -34,12 +34,12 @@ namespace ORION
         ///         that are not specific to any particular Orion instance.
         struct AssetDirectories
         {
-#define ASSETS_DIR "assets"                           // The directory where the web server will look for all assets
-#define ORION_ID_PLACEHOLDER "{orion_id}"             // The placeholder for the Orion id in template strings
-#define AUDIO_DIR_TEMPLATE "{audio_dir}"              // The placeholder for the audio directory in template strings
-#define DATABASE_DIR "database"                       // The directory where the web server will look for database files
-#define USERS_DATABASE_FILE_NAME "users.db"           // The users database file
-#define OPENAI_API_KEY_FILE_NAME "openai_api_key.txt" // The file containing the OpenAI API key
+#define ASSETS_DIR "assets"                            // The directory where the web server will look for all assets
+#define ORION_ID_PLACEHOLDER "{orion_id}"              // The placeholder for the Orion id in template strings
+#define AUDIO_DIR_TEMPLATE "{audio_dir}"               // The placeholder for the audio directory in template strings
+#define DATABASE_DIR "database"                        // The directory where the web server will look for database files
+#define USERS_DATABASE_FILE_NAME "users.db"            // The users database file
+#define OPENAI_API_KEY_FILE_NAME ".openai_api_key.txt" // The file containing the OpenAI API key
 
             /// @brief  The root directory where the web server will look for static assets not specific to an Orion instance
             static constexpr const char* STATIC_ASSETS_DIR = ASSETS_DIR;

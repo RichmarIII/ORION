@@ -13,51 +13,65 @@ function startVoiceRecording()
     navigator.mediaDevices.getUserMedia({ audio: true })
     .then(stream =>
     {
-        // Play a beep sound to indicate that recording has started.
-        let audio = document.getElementById('audio');
-        audio.src = "mic_start.mp3";
-        audio.play();
-
         audioChunks = [];
+
         voiceRecorder = new MediaRecorder(stream);
 
         voiceRecorder.ondataavailable = function(event)
         {
-            audioChunks.push(event.data);
+            if (event.data)
+                audioChunks.push(event.data);
         };
 
         voiceRecorder.onstop = function()
         {
+            // Stop the microphone stream
+            stream.getTracks().forEach(track => track.stop());
+
+            if (audioChunks.length === 0)
+            {
+                console.error('No audio data recorded');
+                return;
+            }
+
+            // Get the MIME type of the audio
+            var mimeType = voiceRecorder.mimeType;
+
+            // Combine the audio chunks into a single Blob
+            var audioBlob = new Blob(audioChunks, { type: mimeType });
+
             // Play a beep sound to indicate that recording has ended.
             let audio = document.getElementById('audio');
             audio.src = "mic_stop.mp3";
             audio.play();
 
-            // Combine the audio chunks into a single Blob
-            var audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-
-            // Send the audioBlob to the server
-            fetch('your-server-endpoint', {
+            // Send the audio data to the server
+            fetch('/stt', {
                 method: 'POST',
                 body: audioBlob,
                 headers: {
-                    'Content-Type': 'audio/wav',
+                    'Content-Type': mimeType,
                 },
             })
             .then(response => response.json())
             .then(data => {
-                console.log('Audio data sent successfully:', data);
+                addMessageToChat(data.message, []);
             })
             .catch(error => {
                 console.error('Error sending audio data:', error);
             });
         };
 
+        // Play a beep sound to indicate that recording has started.
+        let audio = document.getElementById('audio');
+        audio.src = "mic_start.mp3";
+        audio.play();
+
         voiceRecorder.start();
     }).catch(error =>
     {
         console.error('Error getting microphone access: ', error);
-        alert('Please ensure a microphone is connected and permissions are granted.');
+        alert('Please ensure a microphone is connected and permissions are granted.' + error);
     });
 }
 

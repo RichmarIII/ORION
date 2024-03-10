@@ -68,13 +68,13 @@ void OrionWebServer::Start(int Port)
 {
     web::http::experimental::listener::http_listener_config ListenerConfig;
     ListenerConfig.set_ssl_context_callback(
-        [this](boost::asio::ssl::context& ctx)
+        [this](boost::asio::ssl::context& Ctx)
         {
-            ctx.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 |
+            Ctx.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 |
                             boost::asio::ssl::context::no_sslv3 | boost::asio::ssl::context::single_dh_use);
-            ctx.set_password_callback([](std::size_t max_length, boost::asio::ssl::context::password_purpose purpose) { return "test"; });
-            ctx.use_certificate_chain_file("cert.pem");
-            ctx.use_private_key_file("key.pem", boost::asio::ssl::context::pem);
+            Ctx.set_password_callback([](std::size_t MaxLength, boost::asio::ssl::context::password_purpose Purpose) { return "test"; });
+            Ctx.use_certificate_chain_file("cert.pem");
+            Ctx.use_private_key_file("key.pem", boost::asio::ssl::context::pem);
         });
 
     // Create a listener
@@ -143,6 +143,10 @@ void OrionWebServer::HandleRequest(web::http::http_request Request)
     else if (Path == U("/register"))
     {
         HandleRegisterEndpoint(Request);
+    }
+    else if (Path == U("/stt"))
+    {
+        HandleSpeechToTextEndpoint(Request);
     }
     else if (Path.find(U("/speech/")) != std::string::npos)
     {
@@ -728,12 +732,16 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
             [this, Request](std::vector<unsigned char> AudioData)
             {
                 // Get openai api key
-                std::ifstream OpenAI_APIKeyFile {AssetDirectories::ResolveOpenAIKeyFile()};
-                std::string   OpenAIAPIKey {std::istreambuf_iterator<char>(OpenAI_APIKeyFile), std::istreambuf_iterator<char>()};
+                std::ifstream OpenAIAPIKeyFile {AssetDirectories::ResolveOpenAIKeyFile()};
+                std::string   OpenAIAPIKey {std::istreambuf_iterator<char>(OpenAIAPIKeyFile), std::istreambuf_iterator<char>()};
                 if (OpenAIAPIKey.empty())
                 {
                     // Try to get the openai api key from the environment
-                    OpenAIAPIKey = std::getenv("OPENAI_API_KEY");
+                    const auto API_KEY = std::getenv("OPENAI_API_KEY");
+                    if (API_KEY)
+                    {
+                        OpenAIAPIKey = API_KEY;
+                    }
                     if (OpenAIAPIKey.empty())
                     {
                         auto JSpeechToTextRequestResponse          = web::json::value::object();
@@ -743,38 +751,59 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                     }
                 }
 
-                std::ostringstream MultiPartFormDataStream;
-                const auto         MODEL = "whisper-1";
+                // Stream the audio data to a file
+                std::ofstream AudioFile {"audio.mp4", std::ios::binary};
+                AudioFile.write(reinterpret_cast<const char*>(AudioData.data()), AudioData.size());
+                AudioFile.close();
+
+                // Convert the audio to wav format (overwrites the audio.wav file if it exists. Don't ask for confirmation)
+                std::system("ffmpeg -i audio.mp4 -acodec pcm_s16le -ac 1 -ar 16000 audio.wav -y");
+
+                // Read the wav file
+                std::ifstream              WavFile {"audio.wav", std::ios::binary};
+                std::vector<unsigned char> WavData {std::istreambuf_iterator<char>(WavFile), std::istreambuf_iterator<char>()};
+
+                // Get the mime type from the request
+                const auto        MIME_TYPE = MimeTypes::GetMimeType("audio.wav");
+                const std::string MODEL     = "whisper-1";
 
                 // Create a boundary for the multipart/form-data body
-                const auto BOUNDARY = GUID::Generate();
+                const std::string BOUNDARY = "----CppRestSdkFormBoundary";
+
+                // Create the multipart/form-data body
+                std::vector<unsigned char> MultiPartFormData;
+
+                // Helper function to append text to the vector
+                auto AppendText = [&](const std::string& text) { MultiPartFormData.insert(MultiPartFormData.end(), text.begin(), text.end()); };
+
+                // Helper function to append binary data to the vector
+                auto AppendBinary = [&](const std::vector<unsigned char>& data)
+                { MultiPartFormData.insert(MultiPartFormData.end(), data.begin(), data.end()); };
 
                 // Create the multipart/form-data body
 
                 // Add the model part
-                MultiPartFormDataStream << "--" << BOUNDARY << "\r\n";
-                MultiPartFormDataStream << "Content-Disposition: form-data; name=\"model\"\r\n\r\n";
-                MultiPartFormDataStream << MODEL << "\r\n";
+                AppendText("--" + BOUNDARY + "\r\n");
+                AppendText("Content-Disposition: form-data; name=\"model\"\r\n\r\n");
+                AppendText(MODEL + "\r\n");
 
                 // Add the file part
-                MultiPartFormDataStream << "--" << BOUNDARY << "\r\n";
-                MultiPartFormDataStream << "Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n";
-                MultiPartFormDataStream << "Content-Type: audio/wav\r\n\r\n";
-                MultiPartFormDataStream.write(reinterpret_cast<const char*>(AudioData.data()), AudioData.size());
-                MultiPartFormDataStream << "\r\n";
+                AppendText("--" + BOUNDARY + "\r\n");
+                AppendText("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n");
+                AppendText("Content-Type: " + MIME_TYPE + "\r\n\r\n");
+                AppendBinary(WavData);
+                AppendText("\r\n");
 
                 // End of the multipart/form-data body
-                MultiPartFormDataStream << "--" << BOUNDARY << "--";
-
-                const auto MULTI_PART_FORM_DATA = MultiPartFormDataStream.str();
+                AppendText("--" + BOUNDARY + "--");
 
                 // Create the request
                 web::http::client::http_client Client(U("https://api.openai.com/v1"));
                 web::http::http_request        SpeechToTextRequest(web::http::methods::POST);
                 SpeechToTextRequest.set_request_uri(U("/audio/transcriptions"));
                 SpeechToTextRequest.headers().add(U("Authorization"), U("Bearer " + OpenAIAPIKey));
-                SpeechToTextRequest.headers().add(U("Content-Type"), U("multipart/form-data; boundary=" + BOUNDARY));
-                SpeechToTextRequest.set_body(MULTI_PART_FORM_DATA);
+                SpeechToTextRequest.headers().add(U("Content-Type"), U("multipart/form-data; boundary=") + std::string(BOUNDARY));
+                SpeechToTextRequest.set_body(MultiPartFormData);
 
                 // Send the request
                 Client.request(SpeechToTextRequest)
@@ -794,6 +823,8 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                                                 auto JSpeechToTextRequestResponse          = web::json::value::object();
                                                 JSpeechToTextRequestResponse[U("message")] = ResponseJson.at(U("text"));
 
+                                                auto Dump = ResponseJson.serialize();
+
                                                 // Send the response
                                                 Request.reply(web::http::status_codes::OK, JSpeechToTextRequestResponse);
                                             }
@@ -809,8 +840,17 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                             }
                             else
                             {
-                                // Send the response
-                                Request.reply(Response.status_code());
+                                Response.extract_json()
+                                    .then([this, Request, Response](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+                                    .then(
+                                        [this, Request, Response](web::json::value ResponseJson)
+                                        {
+                                            auto JSpeechToTextRequestResponse          = web::json::value::object();
+                                            JSpeechToTextRequestResponse[U("message")] = web::json::value::string(ResponseJson.serialize());
+
+                                            // Send the response
+                                            Request.reply(Response.status_code(), JSpeechToTextRequestResponse);
+                                        });
                             }
                         });
             });
