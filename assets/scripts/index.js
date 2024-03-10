@@ -21,8 +21,15 @@ document.addEventListener('DOMContentLoaded', function()
         }).then(response => response.json())
         .then(data =>
         {
-            // Navigate to the orion page if the user is logged in
-            window.location.href = '/orion.html';
+            if (!data.user_id)
+            {
+                window.location.href = '/login.html';
+            }
+            else
+            {
+                // Navigate to the orion page if the user is logged in
+                window.location.href = '/orion.html';
+            }
         }).catch(error => {
             console.error('Error:', error);
             alert('Failed to login: ' + error);
