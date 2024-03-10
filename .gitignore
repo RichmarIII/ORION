@@ -4,9 +4,10 @@
 .venv/
 .vscode/
 .history/
-*.mp3
 build/
 src/generated/**
 index_preview.html
 embeddings.py
 user-info.json
+cert.pem
+key.pem

@@ -66,8 +66,19 @@ std::string OrionWebServer::AssetDirectories::ResolveBaseAssetDirectory(const st
 
 void OrionWebServer::Start(int Port)
 {
+    web::http::experimental::listener::http_listener_config ListenerConfig;
+    ListenerConfig.set_ssl_context_callback(
+        [this](boost::asio::ssl::context& ctx)
+        {
+            ctx.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 |
+                            boost::asio::ssl::context::no_sslv3 | boost::asio::ssl::context::single_dh_use);
+            ctx.set_password_callback([](std::size_t max_length, boost::asio::ssl::context::password_purpose purpose) { return "test"; });
+            ctx.use_certificate_chain_file("cert.pem");
+            ctx.use_private_key_file("key.pem", boost::asio::ssl::context::pem);
+        });
+
     // Create a listener
-    m_Listener = web::http::experimental::listener::http_listener(U("http://0.0.0.0:") + std::to_string(Port));
+    m_Listener = web::http::experimental::listener::http_listener(U("https://0.0.0.0:") + std::to_string(Port), ListenerConfig);
 
     // Handle requests
     m_Listener.support(web::http::methods::POST, std::bind(&OrionWebServer::HandleRequest, this, std::placeholders::_1));
@@ -706,5 +717,101 @@ void OrionWebServer::HandleRegisterEndpoint(web::http::http_request Request)
                 web::json::value Response = web::json::value::object();
                 Response[U("user_id")]    = web::json::value::string(USER_ID);
                 Request.reply(web::http::status_codes::OK, Response);
+            });
+}
+
+void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
+{
+    Request.extract_vector()
+        .then([this, Request](pplx::task<std::vector<unsigned char>> ExtractVectorTask) { return ExtractVectorTask.get(); })
+        .then(
+            [this, Request](std::vector<unsigned char> AudioData)
+            {
+                // Get openai api key
+                std::ifstream OpenAI_APIKeyFile {AssetDirectories::ResolveOpenAIKeyFile()};
+                std::string   OpenAIAPIKey {std::istreambuf_iterator<char>(OpenAI_APIKeyFile), std::istreambuf_iterator<char>()};
+                if (OpenAIAPIKey.empty())
+                {
+                    // Try to get the openai api key from the environment
+                    OpenAIAPIKey = std::getenv("OPENAI_API_KEY");
+                    if (OpenAIAPIKey.empty())
+                    {
+                        auto JSpeechToTextRequestResponse          = web::json::value::object();
+                        JSpeechToTextRequestResponse[U("message")] = web::json::value::string(U("The OpenAI API key was not found."));
+                        Request.reply(web::http::status_codes::Unauthorized, JSpeechToTextRequestResponse);
+                        return;
+                    }
+                }
+
+                std::ostringstream MultiPartFormDataStream;
+                const auto         MODEL = "whisper-1";
+
+                // Create a boundary for the multipart/form-data body
+                const auto BOUNDARY = GUID::Generate();
+
+                // Create the multipart/form-data body
+
+                // Add the model part
+                MultiPartFormDataStream << "--" << BOUNDARY << "\r\n";
+                MultiPartFormDataStream << "Content-Disposition: form-data; name=\"model\"\r\n\r\n";
+                MultiPartFormDataStream << MODEL << "\r\n";
+
+                // Add the file part
+                MultiPartFormDataStream << "--" << BOUNDARY << "\r\n";
+                MultiPartFormDataStream << "Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n";
+                MultiPartFormDataStream << "Content-Type: audio/wav\r\n\r\n";
+                MultiPartFormDataStream.write(reinterpret_cast<const char*>(AudioData.data()), AudioData.size());
+                MultiPartFormDataStream << "\r\n";
+
+                // End of the multipart/form-data body
+                MultiPartFormDataStream << "--" << BOUNDARY << "--";
+
+                const auto MULTI_PART_FORM_DATA = MultiPartFormDataStream.str();
+
+                // Create the request
+                web::http::client::http_client Client(U("https://api.openai.com/v1"));
+                web::http::http_request        SpeechToTextRequest(web::http::methods::POST);
+                SpeechToTextRequest.set_request_uri(U("/audio/transcriptions"));
+                SpeechToTextRequest.headers().add(U("Authorization"), U("Bearer " + OpenAIAPIKey));
+                SpeechToTextRequest.headers().add(U("Content-Type"), U("multipart/form-data; boundary=" + BOUNDARY));
+                SpeechToTextRequest.set_body(MULTI_PART_FORM_DATA);
+
+                // Send the request
+                Client.request(SpeechToTextRequest)
+                    .then(
+                        [this, Request](web::http::http_response Response)
+                        {
+                            if (Response.status_code() == web::http::status_codes::OK)
+                            {
+                                // Get the response body
+                                Response.extract_json()
+                                    .then([this, Request](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+                                    .then(
+                                        [this, Request](web::json::value ResponseJson)
+                                        {
+                                            if (ResponseJson.has_field(U("text")))
+                                            {
+                                                auto JSpeechToTextRequestResponse          = web::json::value::object();
+                                                JSpeechToTextRequestResponse[U("message")] = ResponseJson.at(U("text"));
+
+                                                // Send the response
+                                                Request.reply(web::http::status_codes::OK, JSpeechToTextRequestResponse);
+                                            }
+                                            else
+                                            {
+                                                auto JSpeechToTextRequestResponse          = web::json::value::object();
+                                                JSpeechToTextRequestResponse[U("message")] = web::json::value::string(ResponseJson.serialize());
+
+                                                // Send the response
+                                                Request.reply(web::http::status_codes::BadRequest, JSpeechToTextRequestResponse);
+                                            }
+                                        });
+                            }
+                            else
+                            {
+                                // Send the response
+                                Request.reply(Response.status_code());
+                            }
+                        });
             });
 }

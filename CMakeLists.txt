@@ -82,6 +82,14 @@ add_custom_command(TARGET ORION POST_BUILD
     ${CMAKE_SOURCE_DIR}/.hass_api_key.txt
     $<TARGET_FILE_DIR:ORION>/.hass_api_key.txt
 
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_SOURCE_DIR}/cert.pem
+    $<TARGET_FILE_DIR:ORION>/cert.pem
+
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_SOURCE_DIR}/key.pem
+    $<TARGET_FILE_DIR:ORION>/key.pem
+
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_SOURCE_DIR}/assets
     $<TARGET_FILE_DIR:ORION>/assets

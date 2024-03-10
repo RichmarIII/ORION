@@ -1,1 +1,44 @@
 @import url('styles.css');
+
+#send-button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: auto;
+    padding: auto;
+    user-select: none;
+    cursor: pointer;
+}
+
+#send-label {
+    display: flex;
+    font-size: 16px;
+    margin: auto;
+    padding: auto;
+    font-style: italic;
+    user-select: none;
+    cursor: pointer;
+}
+
+#send-image {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: auto;
+    padding: auto;
+    width: 24px;
+    user-select: none;
+    cursor: pointer;
+}
+
+#send-separator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 2px;
+    height: 24px;
+    margin-left: 5px;
+    background-color: gray;
+    user-select: none;
+    cursor: pointer;
+}

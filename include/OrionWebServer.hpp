@@ -34,11 +34,12 @@ namespace ORION
         ///         that are not specific to any particular Orion instance.
         struct AssetDirectories
         {
-#define ASSETS_DIR "assets"                 // The directory where the web server will look for all assets
-#define ORION_ID_PLACEHOLDER "{orion_id}"   // The placeholder for the Orion id in template strings
-#define AUDIO_DIR_TEMPLATE "{audio_dir}"    // The placeholder for the audio directory in template strings
-#define DATABASE_DIR "database"             // The directory where the web server will look for database files
-#define USERS_DATABASE_FILE_NAME "users.db" // The users database file
+#define ASSETS_DIR "assets"                           // The directory where the web server will look for all assets
+#define ORION_ID_PLACEHOLDER "{orion_id}"             // The placeholder for the Orion id in template strings
+#define AUDIO_DIR_TEMPLATE "{audio_dir}"              // The placeholder for the audio directory in template strings
+#define DATABASE_DIR "database"                       // The directory where the web server will look for database files
+#define USERS_DATABASE_FILE_NAME "users.db"           // The users database file
+#define OPENAI_API_KEY_FILE_NAME "openai_api_key.txt" // The file containing the OpenAI API key
 
             /// @brief  The root directory where the web server will look for static assets not specific to an Orion instance
             static constexpr const char* STATIC_ASSETS_DIR = ASSETS_DIR;
@@ -62,6 +63,8 @@ namespace ORION
             static constexpr const char* STATIC_DATABASE_DIR = DATABASE_DIR;
 
             static constexpr const char* DATABASE_FILE = ASSETS_DIR "/" DATABASE_DIR "/" USERS_DATABASE_FILE_NAME;
+
+            static constexpr const char* OPENAI_API_KEY_FILE = OPENAI_API_KEY_FILE_NAME;
 
             /// @brief  The directory where the web server will look for generated audio files specific to an Orion instance
             /// @note   The {orion_id} placeholder will be replaced with the id of the Orion instance
@@ -98,6 +101,11 @@ namespace ORION
                 return ResolveTemplate(ORION_AUDIO_DIR_TEMPLATE, STATIC_AUDIO_DIR, OrionId);
             }
 
+            static inline std::string ResolveOpenAIKeyFile()
+            {
+                return OPENAI_API_KEY_FILE;
+            }
+
             /// @brief  Resolves the base asset directory for a given file extension
             /// @param  Extension The file extension
             /// @return The base asset directory (absolute path to the directory where the web server will look for assets of the given extension)
@@ -106,6 +114,7 @@ namespace ORION
 #undef ASSETS_DIR
 #undef DATABASE_DIR
 #undef USERS_DATABASE_FILE_NAME
+#undef OPENAI_API_KEY_FILE_NAME
         };
 
         /// @brief  Destructor (virtual for inheritance)
@@ -129,10 +138,10 @@ namespace ORION
         /// @brief  The /send_message endpoint is used to send a message to Orion. optionally converting it to markdown via the ?markdown=true query
         /// parameter
         /// @param  Request The HTTP request
-        /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/send_message
+        /// @example curl -X POST -d {"message": "Hello, Orion!"} http://localhost:5000/send_message
         /// @example Response: "Hello, user!"
-        /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/send_message?markdown=true
-        /// @example Response: "<p>Hello, user!</p>"
+        /// @example curl -X POST -d {"message": "Hello, Orion!"} http://localhost:5000/send_message?markdown=true
+        /// @example Response: {"message": "<p>Hello, user!</p>"}
         void HandleSendMessageEndpoint(web::http::http_request Request);
 
         /// @brief  The / endpoint is used to serve the Orion web interface
@@ -157,8 +166,8 @@ namespace ORION
 
         /// @brief  The /markdown endpoint is used to convert a message to markdown
         /// @param  Request The HTTP request
-        /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/markdown
-        /// @example Response: "<p>Hello, Orion!"</p>
+        /// @example curl -X POST -d {"message": "Hello, Orion!"} http://localhost:5000/markdown
+        /// @example Response: {"message": "<p>Hello, Orion!</p>"}
         void HandleMarkdownEndpoint(web::http::http_request Request);
 
         /// @brief  The /chat_history endpoint is used to retrieve the chat history.
@@ -177,7 +186,7 @@ namespace ORION
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/speak
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/speak?format=opus
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/speak?format=wav
-        /// @note   The audio files are stored in the audio/{orion_id} directory
+        /// @note The audio file is saved to the your orion instance's speech directory. @see AssetDirectories::ResolveOrionAudioDir
         void HandleSpeakEndpoint(web::http::http_request Request);
 
         /// @brief  The /login endpoint is used to log in to an Orion instance.
@@ -198,6 +207,15 @@ namespace ORION
         /// @example Response: { "id": "1234" }
         /// @note   The user id should be stored and used in the X-User-Id header for all requests.
         void HandleRegisterEndpoint(web::http::http_request Request);
+
+        /// @brief  The /stt endpoint is used to convert speech to text.
+        /// The audio file is sent in the body of the request.
+        /// @param  Request The HTTP request
+        /// @example curl -X POST -d @audio_file http://localhost:5000/stt
+        /// @example Response: {"message": "Hello, Orion!"}
+        /// example curl -X POST -d @audio_file http://localhost:5000/stt?markdown=true
+        /// @example Response: {"message": "<p>Hello, Orion!</p>"}
+        void HandleSpeechToTextEndpoint(web::http::http_request Request);
 
         /// @brief  Instantiates a new Orion instance and returns the new instance. If an Orion instance with the given id already exists on
         /// the server A new local Orion instance is created from the data of the existing server instance. If an Orion instance with the given id

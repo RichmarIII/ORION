@@ -1,5 +1,91 @@
-document.getElementById('send-button').addEventListener('click', function()
+//On holding the microphone button, start recording
+
+// Variables to hold the MediaRecorder instance and the recorded audio chunks
+var voiceRecorder;
+var audioChunks = [];
+let micHoldTimer;
+let micHoldThreshold = 250;
+
+// Function to start recording
+function startVoiceRecording()
 {
+    // Get the microphone access
+    navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream =>
+    {
+        // Play a beep sound to indicate that recording has started.
+        let audio = document.getElementById('audio');
+        audio.src = "mic_start.mp3";
+        audio.play();
+
+        audioChunks = [];
+        voiceRecorder = new MediaRecorder(stream);
+
+        voiceRecorder.ondataavailable = function(event)
+        {
+            audioChunks.push(event.data);
+        };
+
+        voiceRecorder.onstop = function()
+        {
+            // Play a beep sound to indicate that recording has ended.
+            let audio = document.getElementById('audio');
+            audio.src = "mic_stop.mp3";
+            audio.play();
+
+            // Combine the audio chunks into a single Blob
+            var audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+
+            // Send the audioBlob to the server
+            fetch('your-server-endpoint', {
+                method: 'POST',
+                body: audioBlob,
+                headers: {
+                    'Content-Type': 'audio/wav',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Audio data sent successfully:', data);
+            })
+            .catch(error => {
+                console.error('Error sending audio data:', error);
+            });
+        };
+
+        voiceRecorder.start();
+    }).catch(error =>
+    {
+        console.error('Error getting microphone access: ', error);
+        alert('Please ensure a microphone is connected and permissions are granted.');
+    });
+}
+
+// Function to stop recording
+function stopVoiceRecording()
+{
+    if (voiceRecorder)
+    {
+        voiceRecorder.stop();
+    }
+}
+
+// Event listeners for the mic button
+document.getElementById('send-button').addEventListener('touchstart', function(event)
+{
+    event.preventDefault();
+    micHoldTimer = setTimeout(startVoiceRecording, micHoldThreshold);
+});
+document.getElementById('send-button').addEventListener('mousedown', function(event)
+{
+    event.preventDefault();
+    micHoldTimer = setTimeout(startVoiceRecording, micHoldThreshold);
+});
+document.getElementById('send-button').addEventListener('mouseup', function(event)
+{
+    event.preventDefault();
+    clearTimeout(micHoldTimer);
+    stopVoiceRecording();
     var messageInput = document.getElementById('message-input').value;
     var fileInput = document.getElementById('file-input').files;
     if(messageInput.trim() !== '' || fileInput.length > 0)
@@ -9,6 +95,27 @@ document.getElementById('send-button').addEventListener('click', function()
         document.getElementById('file-input').value = '';
     }
 });
+document.getElementById('send-button').addEventListener('touchend', function(event)
+{
+    event.preventDefault();
+    clearTimeout(micHoldTimer);
+    stopVoiceRecording();
+    var messageInput = document.getElementById('message-input').value;
+    var fileInput = document.getElementById('file-input').files;
+    if(messageInput.trim() !== '' || fileInput.length > 0)
+    {
+        addMessageToChat(messageInput, fileInput);
+        document.getElementById('message-input').value = '';
+        document.getElementById('file-input').value = '';
+    }
+});
+document.getElementById('send-button').addEventListener('mouseleave', function(event)
+{
+    event.preventDefault();
+    clearTimeout(micHoldTimer);
+    stopVoiceRecording();
+});
+
 
 // Many browsers do not support playing audio files without user interaction.
 // As a workaround, when the user touches the screen, we will play a silent audio file.
