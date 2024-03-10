@@ -48,10 +48,13 @@ Before installing ORION, ensure you have the following:
 - **C++ Compiler (GCC, MSVC, or CLANG)**: Essential for compiling the project. Choose based on your platform for best compatibility
 - **CMake (version 3.8 or higher)**: Automates the build process, ensuring a smooth setup across different environments. [Download CMake](https://cmake.org/download/)
 - **vcpkg**: Manages C++ library dependencies. [vcpkg on GitHub](https://github.com/microsoft/vcpkg)
-   > **Important Note:** `VCPKG_ROOT` environment variable needs to point to the root of your vcpkg installation and also added to `PATH`
+  > **Important Note:** `VCPKG_ROOT` environment variable needs to point to the root of your vcpkg installation and also added to `PATH`
+  >
 - **OpenAI API key**: Powers AI functionalities. Obtain from [OpenAI](https://openai.com/)
 - **OpenWeatherMap API key**: Enables weather-related features. Sign up at [OpenWeatherMap](https://openweathermap.org/api)
 - **Home-Assistant API key:** Enabled smart home related features. Obtain from [Home-Assistant](https://developers.home-assistant.io/docs/api/rest/ "How to obtain API Key")
+- **ffmpeg:** Needs to be installed and added to `PATH`. [Download ffmpeg](https://ffmpeg.org/download.html)
+- **openssl**: Required for generating SSL certificates. [Download OpenSSL](https://www.openssl.org/source/)
 
 ### Installation Steps
 
@@ -63,10 +66,17 @@ Before installing ORION, ensure you have the following:
    ```bash
    cd ORION
    ```
-4. Install dependencies via vcpkg:
+3. Install dependencies via vcpkg:
    ```bash
    [path-to-vcpkg]/vcpkg install cpprestsdk
    ```
+4. Generate SSL certificates for HTTPS:
+   ```bash
+   openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365
+   ```
+
+   > **Important Note:** The SSL certificates are required for certain features. the names of the certificates should be `key.pem` and `cert.pem`
+   >
 5. Build ORION:
    ```
    mkdir build && cd build
