@@ -1,8 +1,12 @@
 #include "tools/NavigateLinkFunctionTool.hpp"
-#include "Orion.hpp"
 #include "MimeTypes.hpp"
+#include "Orion.hpp"
+
+#include <regex>
 
 using namespace ORION;
+
+using FunctionResultStatics = FunctionTool::Statics::FunctionResults;
 
 std::string NavigateLinkFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
@@ -13,8 +17,9 @@ std::string NavigateLinkFunctionTool::Execute(Orion& Orion, const web::json::val
     {
         // Link is a file with a known mime type, instruct orion that it should analyze the file or download it
         web::json::value NavigateLinkResult = web::json::value::object();
-        NavigateLinkResult[U("content")]    = web::json::value::string(U("The link is a file with a known mime type. Not a web page."));
-        NavigateLinkResult[U("next_action")] =
+        NavigateLinkResult[FunctionResultStatics::NAME_RESULT.data()] =
+            web::json::value::string(U("The link is a file with a known mime type. Not a web page."));
+        NavigateLinkResult[FunctionResultStatics::NAME_ORION_INSTRUCTIONS.data()] =
             web::json::value::string(U("concider analyzing with python (code_interpreter) and generate a summary."));
 
         // Serialize the result to a string
@@ -34,266 +39,72 @@ std::string NavigateLinkFunctionTool::Execute(Orion& Orion, const web::json::val
     // content of the link must be html
     if (const auto CONTENT_TYPE = NAVIGATE_LINK_RESPONSE.headers().content_type(); CONTENT_TYPE.find(U("text/html")) == std::string::npos)
     {
-        web::json::value ErrorObject = web::json::value::object();
-        ErrorObject[U("error")]      = web::json::value::string(U("The content of the link is not html"));
+        web::json::value ErrorObject                           = web::json::value::object();
+        ErrorObject[FunctionResultStatics::NAME_RESULT.data()] = web::json::value::string(U("The content of the link is not html"));
+        ErrorObject[FunctionResultStatics::NAME_ORION_INSTRUCTIONS.data()] =
+            web::json::value::string(U("The content of the link is not html. Try a different link."));
+
+        std::cout << std::endl << "NavigateLinkFunctionTool::Execute: " << ErrorObject.serialize() << std::endl;
+
         return ErrorObject.serialize();
     }
 
     // Parse the response
     const auto RESPONSE_CONTENT = NAVIGATE_LINK_RESPONSE.extract_string().get();
 
-    // Create the result
-    web::json::value NavigateLinkResult = web::json::value::object();
-    NavigateLinkResult[U("content")]    = web::json::value::string(RESPONSE_CONTENT);
-
-    // Serialize the result to a string
-    auto Result = NavigateLinkResult.serialize();
-
     // We only want the content, none of the html markup or other stuff.
     // So we will strip out everything but the content.
+    // We will use a regular expression to do this. Replace the markup with an empty string so we are left with just the content.
 
-    // Firt we get the start and end of the body tag
-    if (const auto START_BODY = Result.find(U("<body")); START_BODY != std::string::npos)
+    const std::regex BODY_REGEX("<body[^>]*>(.*?)</body>", std::regex::icase | std::regex::ECMAScript);
+
+    // Find and keep the body content
+    if (std::smatch BodyMatch; std::regex_search(RESPONSE_CONTENT, BodyMatch, BODY_REGEX))
     {
-        // If we found the body tag, we will strip out everything but the content
-        if (const auto END_BODY = Result.find(U("</body>")); END_BODY != std::string::npos)
+        const std::string BODY_CONTENT = BodyMatch[1];
+
+        // Remove all the html tags
+        const std::regex HTML_TAG_REGEX("<[^>]*>", std::regex::icase | std::regex::ECMAScript);
+
+        // Replace all the html tags with an empty string
+        const std::string BODY_CONTENT_NO_TAGS = std::regex_replace(BODY_CONTENT, HTML_TAG_REGEX, "");
+
+        std::string FinalResult = BODY_CONTENT_NO_TAGS;
+
+        // Maku sure the result is not too long
+        if (constexpr size_t MAX_RESULT_SIZE = 512 * 1024; FinalResult.size() >= MAX_RESULT_SIZE)
         {
-            // Get the content
-            Result = Result.substr(START_BODY, END_BODY - START_BODY);
+            // If the result is too long, truncate it
+            FinalResult = FinalResult.substr(0, MAX_RESULT_SIZE);
+
+            // TODO: Maybe integrage vector search to only keep the most relevant content
         }
+
+        // Create the result
+        web::json::value NavigateLinkResult                                       = web::json::value::object();
+        NavigateLinkResult[FunctionResultStatics::NAME_RESULT.data()]             = web::json::value::string(FinalResult);
+        NavigateLinkResult[FunctionResultStatics::NAME_ORION_INSTRUCTIONS.data()] = web::json::value::string(
+            U("Analyze the content of the link. If the user's question was not answered, The web_search function should be used on the returned "
+              "content to complete the search until the answer is found."
+              "If the user's question was answered, make sure to cite the source of the information with a link to the page you got the information "
+              "from. a user-clickable (href) link MUST be provided, simply stating the source is not enough."));
+
+        std::cout << std::endl << "NavigateLinkFunctionTool::Execute: " << NavigateLinkResult.serialize() << std::endl;
+
+        return NavigateLinkResult.serialize();
     }
 
-    // Remove all the script tags
-    while (true)
     {
-        // Find the start of the script tag
+        web::json::value NavigateLinkResult = web::json::value::object();
+        NavigateLinkResult[FunctionResultStatics::NAME_ORION_INSTRUCTIONS.data()] =
+            web::json::value::string(U("There was no content in the body of the web page. This is unexpected. Try a different link or the web_search "
+                                       "function should be used again, but with a slightly different "
+                                       "query.  Preferably a different link if possible."));
 
-        // If we found the start of the script tag, we will find the end of the script tag and remove it
-        if (const auto START_SCRIPT = Result.find(U("<script")); START_SCRIPT != std::string::npos)
-        {
-            // Find the end of the script tag
+        NavigateLinkResult[FunctionResultStatics::NAME_USER_QUERY.data()] = Parameters.at(FunctionResultStatics::NAME_USER_QUERY.data());
 
-            // If we found the end of the script tag, we will remove the script tag
-            if (const auto END_SCRIPT = Result.find(U("</script>"), START_SCRIPT); END_SCRIPT != std::string::npos)
-            {
-                // Remove the script tag
-                Result = Result.substr(0, START_SCRIPT) + Result.substr(END_SCRIPT + 9);
-            }
-            else
-            {
-                // If we did not find the end of the script tag, we will break out of the loop
-                break;
-            }
-        }
-        else
-        {
-            // If we did not find the start of the script tag, we will break out of the loop
-            break;
-        }
+        std::cout << std::endl << "NavigateLinkFunctionTool::Execute: " << NavigateLinkResult.serialize() << std::endl;
+
+        return NavigateLinkResult.serialize();
     }
-
-    // Remove all the style tags
-    while (true)
-    {
-        // Find the start of the style tag
-
-        // If we found the start of the style tag, we will find the end of the style tag and remove it
-        if (const auto START_STYLE = Result.find(U("<style")); START_STYLE != std::string::npos)
-        {
-            // Find the end of the style tag
-
-            // If we found the end of the style tag, we will remove the style tag
-            if (const auto END_STYLE = Result.find(U("</style>"), START_STYLE); END_STYLE != std::string::npos)
-            {
-                // Remove the style tag
-                Result = Result.substr(0, START_STYLE) + Result.substr(END_STYLE + 8);
-            }
-            else
-            {
-                // If we did not find the end of the style tag, we will break out of the loop
-                break;
-            }
-        }
-        else
-        {
-            // If we did not find the start of the style tag, we will break out of the loop
-            break;
-        }
-    }
-
-    // Remove all the noscript tags
-    while (true)
-    {
-        // Find the start of the noscript tag
-
-        // If we found the start of the noscript tag, we will find the end of the noscript tag and remove it
-        if (const auto START_NO_SCRIPT = Result.find(U("<noscript")); START_NO_SCRIPT != std::string::npos)
-        {
-            // Find the end of the noscript tag
-
-            // If we found the end of the noscript tag, we will remove the noscript tag
-            if (const auto END_NO_SCRIPT = Result.find(U("</noscript>"), START_NO_SCRIPT); END_NO_SCRIPT != std::string::npos)
-            {
-                // Remove the noscript tag
-                Result = Result.substr(0, START_NO_SCRIPT) + Result.substr(END_NO_SCRIPT + 11);
-            }
-            else
-            {
-                // If we did not find the end of the noscript tag, we will break out of the loop
-                break;
-            }
-        }
-        else
-        {
-            // If we did not find the start of the noscript tag, we will break out of the loop
-            break;
-        }
-    }
-
-    // Remove all the comments
-    while (true)
-    {
-        // Find the start of the comment
-
-        // If we found the start of the comment, we will find the end of the comment and remove it
-        if (const auto START_COMMENT = Result.find(U("<!--")); START_COMMENT != std::string::npos)
-        {
-            // Find the end of the comment
-
-            // If we found the end of the comment, we will remove the comment
-            if (const auto END_COMMENT = Result.find(U("-->"), START_COMMENT); END_COMMENT != std::string::npos)
-            {
-                // Remove the comment
-                Result = Result.substr(0, START_COMMENT) + Result.substr(END_COMMENT + 3);
-            }
-            else
-            {
-                // If we did not find the end of the comment, we will break out of the loop
-                break;
-            }
-        }
-        else
-        {
-            // If we did not find the start of the comment, we will break out of the loop
-            break;
-        }
-    }
-
-    // Remove all button tags
-    while (true)
-    {
-        // Find the start of the button tag
-
-        // If we found the start of the button tag, we will find the end of the button tag and remove it
-        if (const auto START_BUTTON = Result.find(U("<button")); START_BUTTON != std::string::npos)
-        {
-            // Find the end of the button tag
-
-            // If we found the end of the button tag, we will remove the button tag
-            if (const auto END_BUTTON = Result.find(U("</button>"), START_BUTTON); END_BUTTON != std::string::npos)
-            {
-                // Remove the button tag
-                Result = Result.substr(0, START_BUTTON) + Result.substr(END_BUTTON + 9);
-            }
-            else
-            {
-                // If we did not find the end of the button tag, we will break out of the loop
-                break;
-            }
-        }
-        else
-        {
-            // If we did not find the start of the button tag, we will break out of the loop
-            break;
-        }
-    }
-
-    // Strip all attributes from the tags
-    while (true)
-    {
-        // Find the start of the tag
-
-        // If we found the start of the tag, we will find the end of the tag and remove the attributes
-        if (const auto START_TAG = Result.find(U("<")); START_TAG != std::string::npos)
-        {
-            // Find the end of the tag
-
-            // If we found the end of the tag, we will remove the attributes
-            if (const auto END_TAG = Result.find(U(">"), START_TAG); END_TAG != std::string::npos)
-            {
-                // Remove the attributes
-                Result = Result.substr(0, START_TAG) + Result.substr(END_TAG + 1);
-            }
-            else
-            {
-                // If we did not find the end of the tag, we will break out of the loop
-                break;
-            }
-        }
-        else
-        {
-            // If we did not find the start of the tag, we will break out of the loop
-            break;
-        }
-    }
-
-    // Remove all extra whitespace and replace it with a single space
-    while (true)
-    {
-        // Find the start of the extra whitespace
-
-        // If we found the start of the extra whitespace, we will remove it
-        if (const auto START_WHITESPACE = Result.find(U("  ")); START_WHITESPACE != std::string::npos)
-        {
-            // Remove the extra whitespace
-            Result = Result.substr(0, START_WHITESPACE) + U(" ") + Result.substr(START_WHITESPACE + 2);
-        }
-        else
-        {
-            // If we did not find the start of the extra whitespace, we will break out of the loop
-            break;
-        }
-    }
-
-    // Remove all the extra newlines and replace them with a single newline
-    while (true)
-    {
-        // Find the start of the extra newline
-
-        // If we found the start of the extra newline, we will remove it
-        if (const auto START_NEWLINE = Result.find(U("\n\n")); START_NEWLINE != std::string::npos)
-        {
-            // Remove the extra newline
-            Result = Result.substr(0, START_NEWLINE) + U("\n") + Result.substr(START_NEWLINE + 2);
-        }
-        else
-        {
-            // If we did not find the start of the extra newline, we will break out of the loop
-            break;
-        }
-    }
-
-    // Maku sure the result is not too long (512kb)
-    if (Result.size() >= 512 * 1024)
-    {
-        // If the result is too long, truncate it
-        Result = Result.substr(0, 512 * 1024);
-    }
-
-    std::cout << std::endl << "NavigateLinkFunctionTool::Execute: " << Result << std::endl;
-
-    web::json::value NavigateLinkResult2  = web::json::value::object();
-    NavigateLinkResult2[U("next_action")] = web::json::value::string(
-        U("The web_search function should be used on the returned content to complete the search until the answer is found."));
-    NavigateLinkResult2[U("final_action")] =
-        web::json::value::string(U("When Complete. Make sure to cite the source of the information with a link to the page you got the information "
-                                   "from. a user-clickable (href) link MUST be provided, simply stating the source is not enough."));
-    NavigateLinkResult2[U("user_query")] = Parameters.at(U("user_query"));
-    NavigateLinkResult2[U("content")]    = web::json::value::string(Result);
-
-    // Serialize the result to a string
-    Result = NavigateLinkResult2.serialize();
-
-    // Return the result
-    return Result;
 }

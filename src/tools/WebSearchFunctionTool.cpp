@@ -3,6 +3,8 @@
 
 using namespace ORION;
 
+using FunctionResultStatics = FunctionTool::Statics::FunctionResults;
+
 std::string WebSearchFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     std::cout << "WebSearchFunctionTool::Execute: " << Parameters.at(U("query")).as_string() << std::endl;
@@ -22,7 +24,8 @@ std::string WebSearchFunctionTool::Execute(Orion& Orion, const web::json::value&
     if (SEARCH_RESPONSE.status_code() != web::http::status_codes::OK)
     {
         web::json::value ErrorObject = web::json::value::object();
-        ErrorObject[U("error")]      = web::json::value::string(U("Failed to search the web: ") + SEARCH_RESPONSE.reason_phrase());
+        ErrorObject[FunctionResultStatics::NAME_RESULT.data()] =
+            web::json::value::string(U("Failed to search the web: ") + SEARCH_RESPONSE.reason_phrase());
         return ErrorObject.serialize();
     }
 
@@ -30,21 +33,26 @@ std::string WebSearchFunctionTool::Execute(Orion& Orion, const web::json::value&
     web::json::value JsonResponseBody = SEARCH_RESPONSE.extract_json().get();
 
     // Create the result
-    web::json::value SearchResult  = web::json::value::object();
-    SearchResult[U("next_action")] = web::json::value::string(
-        U("The navigate_link function should be used on the returned links to complete the search until the answer is found."));
-    SearchResult[U("final_action")] =
-        web::json::value::string(U("When Complete. Make sure to cite the source of the information with a link to the page you got the information "
-                                   "from. a user-clickable (href) link MUST be provided, simply stating the source is not enough."));
+    web::json::value SearchResult                                       = web::json::value::object();
+    SearchResult[FunctionResultStatics::NAME_ORION_INSTRUCTIONS.data()] = web::json::value::string(
+        U("The navigate_link function should be used on any returned links to complete the search until the answer is found. "
+          "If the user's answer is found, make sure to cite the source of the information with a link to the page you got the information "
+          "from. A user-clickable (href) link MUST be provided, simply stating the source is not enough"));
 
-    SearchResult[U("items")] = web::json::value::array();
-    auto& ItemsArray         = SearchResult[U("items")].as_array();
+    // Create the results entry so we can add the items to it
+    auto& SearchResultResultRef = SearchResult[FunctionResultStatics::NAME_RESULT.data()] = web::json::value::object();
+
+    // Create the items entry so we can add the search results to it
+    auto& ItemsArray = SearchResultResultRef[U("items")].as_array();
+
     for (auto& Item : JsonResponseBody.at(U("items")).as_array())
     {
-        web::json::value ItemObject   = web::json::value::object();
-        ItemObject[U("title")]        = Item.has_field(U("title")) ? Item.at(U("title")) : web::json::value::string(U("No Title"));
-        ItemObject[U("link")]         = Item.has_field(U("link")) ? Item.at(U("link")) : web::json::value::string(U("No Link"));
-        ItemObject[U("snippet")]      = Item.has_field(U("snippet")) ? Item.at(U("snippet")) : web::json::value::string(U("No Snippet"));
+        web::json::value ItemObject = web::json::value::object();
+
+        ItemObject[U("title")]   = Item.has_field(U("title")) ? Item.at(U("title")) : web::json::value::string(U("No Title"));
+        ItemObject[U("link")]    = Item.has_field(U("link")) ? Item.at(U("link")) : web::json::value::string(U("No Link"));
+        ItemObject[U("snippet")] = Item.has_field(U("snippet")) ? Item.at(U("snippet")) : web::json::value::string(U("No Snippet"));
+
         ItemsArray[ItemsArray.size()] = ItemObject;
     }
 

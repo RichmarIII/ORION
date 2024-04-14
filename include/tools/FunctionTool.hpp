@@ -10,6 +10,27 @@ namespace ORION
     class FunctionTool : public IOrionTool
     {
     public:
+        struct Statics final
+        {
+            struct FunctionResults final
+            {
+                /**
+                 * @brief The name used for indexing a json object containing the instructions for Orion to follow after execution of a function tool
+                 */
+                static constexpr std::string_view NAME_ORION_INSTRUCTIONS = "orion_instructions";
+
+                /**
+                 * @brief The name used for indexing a json object containing the result of a function tool
+                 */
+                static constexpr std::string_view NAME_RESULT = "result";
+
+                /**
+                 * @brief The name used for indexing a json object containing the original context that lead to the function tool being executed
+                 */
+                static constexpr std::string_view NAME_USER_QUERY = "user_query";
+            };
+        };
+
         /// @brief Construct a new Function Tool object
         /// @param Function The json string representing the function
         /// @note The function must be a valid JSON string
