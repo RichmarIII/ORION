@@ -5,13 +5,13 @@
 namespace ORION
 {
     /// @brief  A tool that can search the filesystem for a file
-    class SearchFilesystemFunctionTool : public FunctionTool
+    class SearchFilesystemFunctionTool final : public FunctionTool
     {
     public:
         struct Statics
         {
             /// @brief A function that searches the filesystem for a file, and returns the matches as well as their metadata/attributes
-            constexpr static const char* SEARCH_FILESYSTEM = R"(
+            constexpr static auto SEARCH_FILESYSTEM = R"(
             {
                 "description" : "Searches the filesystem for a file, and returns the matches as well as their metadata/attributes",
                 "name" : "search_filesystem",

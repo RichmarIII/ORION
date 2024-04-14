@@ -5,13 +5,13 @@
 namespace ORION
 {
     /// @brief  A tool that can change the intelligence of the assistant
-    class ChangeIntelligenceFunctionTool : public FunctionTool
+    class ChangeIntelligenceFunctionTool final : public FunctionTool
     {
     public:
         struct Statics
         {
             /// @brief A function that changes (or lists) the current intelligence of the assistant
-            constexpr static const char* CHANGE_INTELLIGENCE = R"(
+            constexpr static auto CHANGE_INTELLIGENCE = R"(
             {
                 "description" : "Changes (or lists) the current intelligence of the assistant. This will change the model that the assistant uses to respond to messages",
                 "name" : "change_intelligence",

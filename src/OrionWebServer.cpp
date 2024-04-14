@@ -1,22 +1,30 @@
 #include "OrionWebServer.hpp"
+#include "GUID.hpp"
+#include "MimeTypes.hpp"
 #include "Orion.hpp"
+#include "User.hpp"
 #include "tools/ChangeIntelligenceFunctionTool.hpp"
 #include "tools/ChangeVoiceFunctionTool.hpp"
 #include "tools/CodeInterpreterTool.hpp"
+#include "tools/DownloadHTTPFileFunctionTool.hpp"
+#include "tools/ExecSmartDeviceServiceFunctionTool.hpp"
 #include "tools/GetWeatherFunctionTool.hpp"
+#include "tools/ListSmartDevicesFunctionTool.hpp"
+#include "tools/NavigateLinkFunctionTool.hpp"
 #include "tools/RetrievalTool.hpp"
 #include "tools/SearchFilesystemFunctionTool.hpp"
 #include "tools/TakeScreenshotFunctionTool.hpp"
 #include "tools/WebSearchFunctionTool.hpp"
-#include "tools/ListSmartDevicesFunctionTool.hpp"
-#include "tools/ExecSmartDeviceServiceFunctionTool.hpp"
-#include "MimeTypes.hpp"
-#include "User.hpp"
-#include "GUID.hpp"
+#include "tools/CreateAutonomousActionPlanFunctionTool.hpp"
+#include "tools/UploadFileToAssistantFunctionTool.hpp"
+#include "tools/RememberKnowledgeFunctionTool.hpp"
+#include "tools/RecallKnowledgeFunctionTool.hpp"
+#include "tools/UpdateKnowledgeFunctionTool.hpp"
 
 #include <cmark.h>
 
 #include <cpprest/filestream.h>
+#include <cpprest/producerconsumerstream.h>
 
 #include <filesystem>
 
@@ -64,7 +72,7 @@ std::string OrionWebServer::AssetDirectories::ResolveBaseAssetDirectory(const st
     }
 }
 
-void OrionWebServer::Start(int Port)
+void OrionWebServer::Start(const int PORT)
 {
     web::http::experimental::listener::http_listener_config ListenerConfig;
     ListenerConfig.set_ssl_context_callback(
@@ -78,17 +86,17 @@ void OrionWebServer::Start(int Port)
         });
 
     // Create a listener
-    m_Listener = web::http::experimental::listener::http_listener(U("https://0.0.0.0:") + std::to_string(Port), ListenerConfig);
+    m_Listener = web::http::experimental::listener::http_listener(U("https://0.0.0.0:") + std::to_string(PORT), ListenerConfig);
 
     // Handle requests
     m_Listener.support(web::http::methods::POST, std::bind(&OrionWebServer::HandleRequest, this, std::placeholders::_1));
     m_Listener.support(web::http::methods::GET, std::bind(&OrionWebServer::HandleRequest, this, std::placeholders::_1));
 
     // Start the listener
-    m_Listener.open().wait();
+    m_IsRunning = m_Listener.open().wait() == pplx::task_status::completed ? true : false;
 
-    // Set the running flag
-    m_IsRunning = true;
+    // Create orion event thread
+    m_OrionEventThread = std::thread(std::bind(&OrionWebServer::OrionEventThreadHandler, this));
 }
 
 void OrionWebServer::Stop()
@@ -96,6 +104,8 @@ void OrionWebServer::Stop()
     // Close the listener
     m_IsRunning = false;
     m_ConditionVariable.notify_one();
+    m_OrionEventQueueConditionVariable.notify_one();
+    m_OrionEventThread.join();
 }
 
 void OrionWebServer::Wait()
@@ -107,50 +117,60 @@ void OrionWebServer::Wait()
     m_ConditionVariable.wait(Lock, [this] { return !m_IsRunning; });
 
     // Close the listener
-    m_Listener.close().wait();
+    if (m_Listener.close().wait() != pplx::task_status::completed)
+        std::cout << __FUNCTION__ << ":" << __LINE__ << ": Failed to close http listener!";
 }
 
-void OrionWebServer::HandleRequest(web::http::http_request Request)
+void OrionWebServer::HandleRequest(const web::http::http_request& Request)
 {
     // Get the request path
-    auto Path = Request.request_uri().path();
+    // ReSharper disable once CppTooWideScopeInitStatement
+    const auto PATH = Request.request_uri().path();
+
+    // Store the current endpoint request
+    m_CurrentRequest = Request;
 
     // Dispatch the request to the appropriate handler
-    if (Path == U("/send_message"))
+    if (PATH == U("/send_message"))
     {
         HandleSendMessageEndpoint(Request);
     }
-    else if (Path == U("/"))
+    else if (PATH == U("/"))
     {
         HandleRootEndpoint(Request);
     }
-    else if (Path == U("/markdown"))
+    else if (PATH == U("/markdown"))
     {
         HandleMarkdownEndpoint(Request);
     }
-    else if (Path == U("/chat_history"))
+    else if (PATH == U("/chat_history"))
     {
         HandleChatHistoryEndpoint(Request);
     }
-    else if (Path == U("/speak"))
+    else if (PATH == U("/speak"))
     {
         HandleSpeakEndpoint(Request);
     }
-    else if (Path == U("/login"))
+    else if (PATH == U("/login"))
     {
         HandleLoginEndpoint(Request);
     }
-    else if (Path == U("/register"))
+    else if (PATH == U("/register"))
     {
         HandleRegisterEndpoint(Request);
     }
-    else if (Path == U("/stt"))
+    else if (PATH == U("/stt"))
     {
         HandleSpeechToTextEndpoint(Request);
     }
-    else if (Path.find(U("/speech/")) != std::string::npos)
+    else if (PATH.find(U("/speech/")) != std::string::npos)
     {
         HandleSpeechAssetFileEndpoint(Request);
+    }
+    // Handle orion_event endpoint
+    else if (PATH == U("/orion_events"))
+    {
+        HandleOrionEventsEndpoint(Request);
     }
     else
     {
@@ -193,37 +213,27 @@ void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
     // Check if markdown is requested
     const bool IS_MARKDOWN_REQUESTED = Request.request_uri().query().find(U("markdown=true")) != std::string::npos;
 
-    // Get the message from the request body
+    // Extract the message and the files from the form data
     Request.extract_json()
-        .then([](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+        .then([this, OrionIt, Request, IS_MARKDOWN_REQUESTED](const pplx::task<web::json::value>& ExtractJsonTask) { return ExtractJsonTask; })
         .then(
-            [OrionIt, IS_MARKDOWN_REQUESTED, Request](web::json::value RequestMessageJson)
+            [this, OrionIt, Request, IS_MARKDOWN_REQUESTED](web::json::value JsonRequestBody)
             {
                 // Get the message from the request body
-                auto RequestMessage = RequestMessageJson.at(U("message")).as_string();
-                (*OrionIt)
-                    ->SendMessageAsync(RequestMessage)
-                    .then([](pplx::task<std::string> SendMessageTask) { return SendMessageTask.get(); })
-                    .then(
-                        [IS_MARKDOWN_REQUESTED, Request](std::string SendMessageResponse)
-                        {
-                            // Convert the message to markdown if requested
-                            if (IS_MARKDOWN_REQUESTED)
-                            {
-                                auto pMarkdown = cmark_markdown_to_html(SendMessageResponse.c_str(), SendMessageResponse.length(), CMARK_OPT_UNSAFE);
-                                SendMessageResponse = pMarkdown;
-                                free(pMarkdown);
-                            }
+                auto Message = JsonRequestBody.at(U("message")).as_string();
 
-                            web::json::value SendMessageResponseJson = web::json::value::object();
-                            SendMessageResponseJson[U("message")]    = web::json::value::string(SendMessageResponse);
+                // Get the files from the request body
+                auto Files = JsonRequestBody.has_field(U("files")) ? JsonRequestBody.at(U("files")).as_array() : web::json::value::array().as_array();
 
-                            // Send the response
-                            Request.reply(web::http::status_codes::OK, SendMessageResponseJson);
-                        });
+                // Send the message to the Orion instance
+                (*OrionIt)->SendMessageAsync(Message, Files);
+
+                // Send the response
+                Request.reply(web::http::status_codes::OK);
             });
 }
 
+// ReSharper disable once CppMemberFunctionMayBeStatic
 void OrionWebServer::HandleRootEndpoint(web::http::http_request Request)
 {
     constexpr auto INDEX_HTML {U("index.html")};
@@ -242,9 +252,12 @@ void OrionWebServer::HandleRootEndpoint(web::http::http_request Request)
 
     // Send the contents of the index.html file
     const auto MIME_TYPE = MimeTypes::GetMimeType(INDEX_HTML);
+
+    // ReSharper disable once CppExpressionWithoutSideEffects
     Request.reply(web::http::status_codes::OK, IndexContents, MIME_TYPE);
 }
 
+// ReSharper disable once CppMemberFunctionMayBeStatic
 void OrionWebServer::HandleAssetFileEndpoint(web::http::http_request Request)
 {
     // Get the file name from the request path and make it relative (remove the leading slash)
@@ -259,13 +272,14 @@ void OrionWebServer::HandleAssetFileEndpoint(web::http::http_request Request)
     // Stream the file to the response
     concurrency::streams::fstream::open_istream(FILE_PATH)
         .then(
-            [Request, CONTENT_TYPE](concurrency::streams::istream StaticFileInputStream)
+            [Request, CONTENT_TYPE](const concurrency::streams::istream& StaticFileInputStream)
             {
                 // Send the response
+                // ReSharper disable once CppExpressionWithoutSideEffects
                 Request.reply(web::http::status_codes::OK, StaticFileInputStream, CONTENT_TYPE);
             })
         .then(
-            [FILE_PATH, Request](pplx::task<void> OpenStreamTask)
+            [FILE_PATH, Request](const pplx::task<void>& OpenStreamTask)
             {
                 try
                 {
@@ -336,13 +350,14 @@ void OrionWebServer::HandleSpeechAssetFileEndpoint(web::http::http_request Reque
     // Stream the file to the response
     concurrency::streams::fstream::open_istream(SPEECH_FILE_PATH)
         .then(
-            [Request, CONTENT_TYPE](concurrency::streams::istream StaticFileInputStream)
+            [Request, CONTENT_TYPE](const concurrency::streams::istream& StaticFileInputStream)
             {
                 // Send the response
+                // ReSharper disable once CppExpressionWithoutSideEffects
                 Request.reply(web::http::status_codes::OK, StaticFileInputStream, CONTENT_TYPE);
             })
         .then(
-            [SPEECH_FILE_PATH, Request](pplx::task<void> OpenStreamTask)
+            [SPEECH_FILE_PATH, Request](const pplx::task<void>& OpenStreamTask)
             {
                 try
                 {
@@ -358,11 +373,11 @@ void OrionWebServer::HandleSpeechAssetFileEndpoint(web::http::http_request Reque
             });
 }
 
-void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request Request)
+void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request Request) const
 {
     // Get the message from the request body
     Request.extract_json()
-        .then([this, Request](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+        .then([this](const pplx::task<web::json::value>& ExtractJsonTask) { return ExtractJsonTask.get(); })
         .then(
             [this, Request](web::json::value JsonRequestBody)
             {
@@ -371,8 +386,8 @@ void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request Request)
 
                 // Convert the message to markdown
                 {
-                    auto pMarkdown = cmark_markdown_to_html(RequestMessage.c_str(), RequestMessage.length(), CMARK_OPT_UNSAFE);
-                    RequestMessage = pMarkdown;
+                    char* pMarkdown = cmark_markdown_to_html(RequestMessage.c_str(), RequestMessage.length(), CMARK_OPT_UNSAFE);
+                    RequestMessage  = pMarkdown;
                     free(pMarkdown);
                 }
 
@@ -380,6 +395,7 @@ void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request Request)
                 Response[U("message")]    = web::json::value::string(RequestMessage);
 
                 // Send the response
+                // ReSharper disable once CppExpressionWithoutSideEffects
                 Request.reply(web::http::status_codes::OK, Response);
             });
 }
@@ -391,6 +407,7 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
     {
         web::json::value Response = web::json::value::object();
         Response[U("message")]    = web::json::value::string(U("The X-User-Id header is required."));
+        // ReSharper disable once CppExpressionWithoutSideEffects
         Request.reply(web::http::status_codes::BadRequest, Response);
         return;
     }
@@ -405,6 +422,8 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
     {
         web::json::value Response = web::json::value::object();
         Response[U("message")]    = web::json::value::string(U("User is not logged in."));
+
+        // ReSharper disable once CppExpressionWithoutSideEffects
         Request.reply(web::http::status_codes::Unauthorized, Response);
         return;
     }
@@ -418,6 +437,8 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
     {
         web::json::value Response = web::json::value::object();
         Response[U("message")]    = web::json::value::string(U("Could not find an Orion instance for the given user."));
+
+        // ReSharper disable once CppExpressionWithoutSideEffects
         Request.reply(web::http::status_codes::BadRequest, Response);
         return;
     }
@@ -427,15 +448,14 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
         [this, Request](web::json::value ChatHistory)
         {
             // Check if the query parameter is present
-            bool IsMarkdownRequested = Request.request_uri().query().find(U("markdown=true")) != std::string::npos;
 
             // Convert the chat history to markdown if the query parameter is present
-            if (IsMarkdownRequested)
+            if (const bool IS_MARKDOWN_REQUESTED = Request.request_uri().query().find(U("markdown=true")) != std::string::npos; IS_MARKDOWN_REQUESTED)
             {
                 for (auto& JMessage : ChatHistory.as_array())
                 {
-                    auto Message           = JMessage.at(U("message")).as_string();
-                    auto pMarkdown         = cmark_markdown_to_html(Message.c_str(), Message.length(), CMARK_OPT_UNSAFE);
+                    auto  Message          = JMessage.at(U("message")).as_string();
+                    char* pMarkdown        = cmark_markdown_to_html(Message.c_str(), Message.length(), CMARK_OPT_UNSAFE);
                     JMessage[U("message")] = web::json::value::string(pMarkdown);
                     JMessage[U("role")]    = web::json::value::string(JMessage.at(U("role")).as_string() == U("user") ? U("user") : U("assistant"));
                     free(pMarkdown);
@@ -443,6 +463,8 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
             }
 
             // Send the response
+
+            // ReSharper disable once CppExpressionWithoutSideEffects
             Request.reply(web::http::status_codes::OK, ChatHistory);
         });
 }
@@ -481,12 +503,12 @@ void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
 
     // Get the message from the request body
     Request.extract_json()
-        .then([this, OrionIt, Request](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+        .then([this](const pplx::task<web::json::value>& ExtractJsonTask) { return ExtractJsonTask.get(); })
         .then(
             [this, OrionIt, Request](web::json::value RequestMessageJson)
             {
                 // Get the audio format from the query parameter
-                ETTSAudioFormat AudioFormat = ETTSAudioFormat::MP3;
+                auto AudioFormat = ETTSAudioFormat::MP3;
                 if (Request.request_uri().query().find(U("format=opus")) != std::string::npos)
                 {
                     AudioFormat = ETTSAudioFormat::Opus;
@@ -517,6 +539,8 @@ void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
                         [this, Request]()
                         {
                             // Send the response
+
+                            // ReSharper disable once CppExpressionWithoutSideEffects
                             Request.reply(web::http::status_codes::OK);
                         });
             });
@@ -525,6 +549,11 @@ void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
 const Orion& OrionWebServer::InstantiateOrionInstance(const std::string& ExistingOrionInstanceID)
 {
     // Create a new Orion instance
+
+    if (!m_CurrentRequest)
+    {
+        throw std::runtime_error("The current endpoint request is null.");
+    }
 
     // Declare Default Tools
     std::vector<std::unique_ptr<IOrionTool>> Tools {};
@@ -536,48 +565,53 @@ const Orion& OrionWebServer::InstantiateOrionInstance(const std::string& Existin
     Tools.push_back(std::make_unique<WebSearchFunctionTool>());
     Tools.push_back(std::make_unique<ChangeVoiceFunctionTool>());
     Tools.push_back(std::make_unique<ChangeIntelligenceFunctionTool>());
-    Tools.push_back(std::make_unique<RetrievalTool>());
+    // Tools.push_back(std::make_unique<RetrievalTool>());
     Tools.push_back(std::make_unique<CodeInterpreterTool>());
     Tools.push_back(std::make_unique<ListSmartDevicesFunctionTool>());
     Tools.push_back(std::make_unique<ExecSmartDeviceServiceFunctionTool>());
+    Tools.push_back(std::make_unique<NavigateLinkFunctionTool>());
+    Tools.push_back(std::make_unique<DownloadHTTPFileFunctionTool>());
+    Tools.push_back(std::make_unique<CreateAutonomousActionPlanFunctionTool>());
+    Tools.push_back(std::make_unique<UploadFileToAssistantFunctionTool>());
+    Tools.push_back(std::make_unique<RememberKnowledgeFunctionTool>());
+    Tools.push_back(std::make_unique<RecallKnowledgeFunctionTool>());
+    Tools.push_back(std::make_unique<UpdateKnowledgeFunctionTool>());
 
     // Check if the Orion instance already exists locally (Only one Orion instance is allowed per user)
-    auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
-                                [ExistingOrionInstanceID](const std::unique_ptr<Orion>& Orion)
-                                { return Orion->GetCurrentAssistantID() == ExistingOrionInstanceID; });
 
     // Check if the Orion instance was found locally
-    if (OrionIt != m_OrionInstances.end())
+    if (const auto ORION_IT = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
+                                           [ExistingOrionInstanceID](const std::unique_ptr<Orion>& Orion)
+                                           { return Orion->GetCurrentAssistantID() == ExistingOrionInstanceID; });
+        ORION_IT != m_OrionInstances.end())
     {
-        return **OrionIt;
+        return **ORION_IT;
     }
 
     // Create the Orion instance
     auto NewOrion = std::make_unique<Orion>(ExistingOrionInstanceID, std::move(Tools));
 
     // Initialize the Orion instance
-    NewOrion->Initialize();
-
-    auto& OrionInstance = *NewOrion;
+    NewOrion->Initialize(*this, *m_CurrentRequest);
 
     // Add the Orion instance to the list
     m_OrionInstances.push_back(std::move(NewOrion));
 
-    return OrionInstance;
+    return *m_OrionInstances.back();
 }
 
 void OrionWebServer::HandleLoginEndpoint(web::http::http_request Request)
 {
     // Get the username and password from the request body
     Request.extract_json()
-        .then([this, Request](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+        .then([this](const pplx::task<web::json::value>& ExtractJsonTask) { return ExtractJsonTask.get(); })
         .then(
             [this, Request](web::json::value JsonRequestBody)
             {
                 // Get the username and password from the request body
-                auto Username = JsonRequestBody.has_field(U("username")) ? JsonRequestBody.at(U("username")).as_string() : U("");
-                auto Password = JsonRequestBody.has_field(U("password")) ? JsonRequestBody.at(U("password")).as_string() : U("");
-                auto UserID   = JsonRequestBody.has_field(U("user_id")) ? JsonRequestBody.at(U("user_id")).as_string() : U("");
+                const auto USERNAME = JsonRequestBody.has_field(U("username")) ? JsonRequestBody.at(U("username")).as_string() : U("");
+                const auto PASSWORD = JsonRequestBody.has_field(U("password")) ? JsonRequestBody.at(U("password")).as_string() : U("");
+                const auto USER_ID  = JsonRequestBody.has_field(U("user_id")) ? JsonRequestBody.at(U("user_id")).as_string() : U("");
 
                 // Get the database path
                 const auto DB_PATH = std::filesystem::path(AssetDirectories::DATABASE_FILE);
@@ -594,23 +628,27 @@ void OrionWebServer::HandleLoginEndpoint(web::http::http_request Request)
                 DB << "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, orion_id TEXT, username TEXT, password TEXT);";
 
                 // Convert the username to lowercase
-                std::transform(Username.begin(), Username.end(), Username.begin(), ::tolower);
+                auto UserNameLower = USERNAME;
+                std::transform(UserNameLower.begin(), UserNameLower.end(), UserNameLower.begin(), ::tolower);
 
                 // Check if the username already exists
                 int UserCount = 0;
-                DB << "SELECT COUNT(*) FROM users WHERE username = ? OR user_id = ?;" << Username << UserID >> UserCount;
+                DB << "SELECT COUNT(*) FROM users WHERE username = ? OR user_id = ?;" << UserNameLower << USER_ID >> UserCount;
 
                 if (UserCount <= 0)
                 {
                     web::json::value Response = web::json::value::object();
                     Response[U("message")]    = web::json::value::string(U("The user does not exist."));
+
+                    // ReSharper disable once CppExpressionWithoutSideEffects
                     Request.reply(web::http::status_codes::BadRequest, Response);
                     return;
                 }
 
                 // Get the user_id and orion_id from the database if the username and password are valid OR if the user_id is valid
-                DB << "SELECT user_id,orion_id FROM users WHERE (username = ? AND password = ?) OR user_id = ?;" << Username << Password << UserID >>
-                    [&Usr](std::string IDArg, std::string OrionIDArg) {
+                DB << "SELECT user_id,orion_id FROM users WHERE (username = ? AND password = ?) OR user_id = ?;" << UserNameLower << PASSWORD
+                   << USER_ID >>
+                    [&Usr](const std::string& IDArg, const std::string& OrionIDArg) {
                         Usr = {IDArg, OrionIDArg};
                     };
 
@@ -618,13 +656,15 @@ void OrionWebServer::HandleLoginEndpoint(web::http::http_request Request)
                 if (Usr)
                 {
                     // Check if user is already logged in
-                    const auto USER_ITER =
-                        std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [Usr](const User& User) { return User.UserID == Usr.UserID; });
 
-                    if (USER_ITER != m_LoggedInUsers.end())
+                    if (const auto USER_ITER = std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(),
+                                                            [Usr](const User& User) { return User.UserID == Usr.UserID; });
+                        USER_ITER != m_LoggedInUsers.end())
                     {
                         web::json::value Response = web::json::value::object();
                         Response[U("user_id")]    = web::json::value::string(Usr.UserID);
+
+                        // ReSharper disable once CppExpressionWithoutSideEffects
                         Request.reply(web::http::status_codes::OK, Response);
                         return;
                     }
@@ -636,12 +676,16 @@ void OrionWebServer::HandleLoginEndpoint(web::http::http_request Request)
 
                     web::json::value Response = web::json::value::object();
                     Response[U("user_id")]    = web::json::value::string(Usr.UserID);
+
+                    // ReSharper disable once CppExpressionWithoutSideEffects
                     Request.reply(web::http::status_codes::OK, Response);
                 }
                 else
                 {
                     web::json::value Response = web::json::value::object();
                     Response[U("message")]    = web::json::value::string(U("Invalid username or password."));
+
+                    // ReSharper disable once CppExpressionWithoutSideEffects
                     Request.reply(web::http::status_codes::Unauthorized, Response);
                 }
             });
@@ -651,19 +695,21 @@ void OrionWebServer::HandleRegisterEndpoint(web::http::http_request Request)
 {
     // Get the username and password from the request body
     Request.extract_json()
-        .then([this, Request](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+        .then([this](const pplx::task<web::json::value>& ExtractJsonTask) { return ExtractJsonTask.get(); })
         .then(
             [this, Request](web::json::value JsonRequestBody)
             {
                 // Get the username and password from the request body
-                auto Username = JsonRequestBody.at(U("username")).as_string();
-                auto Password = JsonRequestBody.at(U("password")).as_string();
+                const auto USERNAME = JsonRequestBody.at(U("username")).as_string();
+                const auto PASSWORD = JsonRequestBody.at(U("password")).as_string();
 
                 // Check if the username and password are empty
-                if (Username.empty() || Password.empty())
+                if (USERNAME.empty() || PASSWORD.empty())
                 {
                     web::json::value Response = web::json::value::object();
                     Response[U("message")]    = web::json::value::string(U("The username and password are required."));
+
+                    // ReSharper disable once CppExpressionWithoutSideEffects
                     Request.reply(web::http::status_codes::BadRequest, Response);
                     return;
                 }
@@ -681,16 +727,19 @@ void OrionWebServer::HandleRegisterEndpoint(web::http::http_request Request)
                 DB << "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, orion_id TEXT, username TEXT, password TEXT);";
 
                 // Convert the username to lowercase
-                std::transform(Username.begin(), Username.end(), Username.begin(), ::tolower);
+                auto UserNameLower = USERNAME;
+                std::transform(UserNameLower.begin(), UserNameLower.end(), UserNameLower.begin(), ::tolower);
 
                 // Check if the username already exists
                 int UserCount = 0;
-                DB << "SELECT COUNT(*) FROM users WHERE username = ?;" << Username >> UserCount;
+                DB << "SELECT COUNT(*) FROM users WHERE username = ?;" << UserNameLower >> UserCount;
 
                 if (UserCount > 0)
                 {
                     web::json::value Response = web::json::value::object();
                     Response[U("message")]    = web::json::value::string(U("The username already exists."));
+
+                    // ReSharper disable once CppExpressionWithoutSideEffects
                     Request.reply(web::http::status_codes::Conflict, Response);
                     return;
                 }
@@ -702,32 +751,37 @@ void OrionWebServer::HandleRegisterEndpoint(web::http::http_request Request)
                 const auto ORION_ID = ORION.GetCurrentAssistantID();
 
                 // Generate a guid for the user id using custom
-                const std::string USER_ID = GUID::Generate();
+                const auto USER_ID = static_cast<std::string>(GUID::Generate());
 
                 if (USER_ID.empty() || ORION_ID.empty())
                 {
                     web::json::value Response = web::json::value::object();
                     Response[U("message")]    = web::json::value::string(U("An internal error occurred."));
+
+                    // ReSharper disable once CppExpressionWithoutSideEffects
                     Request.reply(web::http::status_codes::InternalError, Response);
                     return;
                 }
 
                 // Insert the user into the database
-                DB << "INSERT INTO users (user_id, orion_id, username, password) VALUES (?, ?, ?, ?);" << USER_ID << ORION_ID << Username << Password;
+                DB << "INSERT INTO users (user_id, orion_id, username, password) VALUES (?, ?, ?, ?);" << USER_ID << ORION_ID << UserNameLower
+                   << PASSWORD;
 
                 m_LoggedInUsers.push_back({USER_ID, ORION_ID});
 
                 // Send the response
                 web::json::value Response = web::json::value::object();
                 Response[U("user_id")]    = web::json::value::string(USER_ID);
+
+                // ReSharper disable once CppExpressionWithoutSideEffects
                 Request.reply(web::http::status_codes::OK, Response);
             });
 }
 
-void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
+void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request) const
 {
     Request.extract_vector()
-        .then([this, Request](pplx::task<std::vector<unsigned char>> ExtractVectorTask) { return ExtractVectorTask.get(); })
+        .then([this](const pplx::task<std::vector<unsigned char>>& ExtractVectorTask) { return ExtractVectorTask.get(); })
         .then(
             [this, Request](std::vector<unsigned char> AudioData)
             {
@@ -737,15 +791,16 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                 if (OpenAIAPIKey.empty())
                 {
                     // Try to get the openai api key from the environment
-                    const auto API_KEY = std::getenv("OPENAI_API_KEY");
-                    if (API_KEY)
+                    if (const char* pAPI_KEY = std::getenv("OPENAI_API_KEY"))
                     {
-                        OpenAIAPIKey = API_KEY;
+                        OpenAIAPIKey = pAPI_KEY;
                     }
                     if (OpenAIAPIKey.empty())
                     {
                         auto JSpeechToTextRequestResponse          = web::json::value::object();
                         JSpeechToTextRequestResponse[U("message")] = web::json::value::string(U("The OpenAI API key was not found."));
+
+                        // ReSharper disable once CppExpressionWithoutSideEffects
                         Request.reply(web::http::status_codes::Unauthorized, JSpeechToTextRequestResponse);
                         return;
                     }
@@ -774,11 +829,11 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                 std::vector<unsigned char> MultiPartFormData;
 
                 // Helper function to append text to the vector
-                auto AppendText = [&](const std::string& text) { MultiPartFormData.insert(MultiPartFormData.end(), text.begin(), text.end()); };
+                auto AppendText = [&](const std::string& Text) { MultiPartFormData.insert(MultiPartFormData.end(), Text.begin(), Text.end()); };
 
                 // Helper function to append binary data to the vector
-                auto AppendBinary = [&](const std::vector<unsigned char>& data)
-                { MultiPartFormData.insert(MultiPartFormData.end(), data.begin(), data.end()); };
+                auto AppendBinary = [&](const std::vector<unsigned char>& Data)
+                { MultiPartFormData.insert(MultiPartFormData.end(), Data.begin(), Data.end()); };
 
                 // Create the multipart/form-data body
 
@@ -814,7 +869,7 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                             {
                                 // Get the response body
                                 Response.extract_json()
-                                    .then([this, Request](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+                                    .then([this, Request](const pplx::task<web::json::value>& ExtractJsonTask) { return ExtractJsonTask.get(); })
                                     .then(
                                         [this, Request](web::json::value ResponseJson)
                                         {
@@ -826,6 +881,7 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                                                 auto Dump = ResponseJson.serialize();
 
                                                 // Send the response
+                                                // ReSharper disable once CppExpressionWithoutSideEffects
                                                 Request.reply(web::http::status_codes::OK, JSpeechToTextRequestResponse);
                                             }
                                             else
@@ -834,6 +890,7 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                                                 JSpeechToTextRequestResponse[U("message")] = web::json::value::string(ResponseJson.serialize());
 
                                                 // Send the response
+                                                // ReSharper disable once CppExpressionWithoutSideEffects
                                                 Request.reply(web::http::status_codes::BadRequest, JSpeechToTextRequestResponse);
                                             }
                                         });
@@ -841,17 +898,93 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                             else
                             {
                                 Response.extract_json()
-                                    .then([this, Request, Response](pplx::task<web::json::value> ExtractJsonTask) { return ExtractJsonTask.get(); })
+                                    .then([this, Request, Response](const pplx::task<web::json::value>& ExtractJsonTask)
+                                          { return ExtractJsonTask.get(); })
                                     .then(
-                                        [this, Request, Response](web::json::value ResponseJson)
+                                        [this, Request, Response](const web::json::value& ResponseJson)
                                         {
                                             auto JSpeechToTextRequestResponse          = web::json::value::object();
                                             JSpeechToTextRequestResponse[U("message")] = web::json::value::string(ResponseJson.serialize());
 
                                             // Send the response
+                                            // ReSharper disable once CppExpressionWithoutSideEffects
                                             Request.reply(Response.status_code(), JSpeechToTextRequestResponse);
                                         });
                             }
                         });
             });
+}
+
+void OrionWebServer::HandleOrionEventsEndpoint(web::http::http_request Request)
+{
+    // Register the client for Orion events
+    {
+        std::lock_guard<std::mutex> OrionEventClientsLockGuard(m_OrionEventClientsMutex);
+
+        // Create the response
+        web::http::http_response Response(web::http::status_codes::OK);
+        Response.headers().add(U("Content-Type"), U("text/event-stream"));
+        Response.headers().add(U("Cache-Control"), U("no-cache"));
+        Response.headers().add(U("Connection"), U("keep-alive"));
+
+        concurrency::streams::producer_consumer_buffer<uint8_t> Buffer;
+
+        // Add the client to the list of clients
+        m_OrionEventClients.push_back(Buffer);
+
+        Response.set_body(m_OrionEventClients.back().create_istream(), U("text/event-stream"));
+
+        // Send the response
+        Request.reply(Response);
+    }
+}
+
+void OrionWebServer::SendServerEvent(const OrionEventName& Event, const web::json::value& Data)
+{
+    // We push the message to a queue. The queue is processed in a separate thread.
+    {
+        std::lock_guard<std::mutex> LockGuard(m_OrionEventQueueMutex);
+        m_OrionEventQueue.push({Event, Data});
+    }
+
+    // Notify the thread to process the queue
+    m_OrionEventQueueConditionVariable.notify_one();
+}
+
+void OrionWebServer::OrionEventThreadHandler()
+{
+    while (m_IsRunning)
+    {
+        std::unique_lock<std::mutex> Lock(m_OrionEventQueueMutex);
+
+        // Wait for the condition variable to be notified
+        m_OrionEventQueueConditionVariable.wait(Lock, [this] { return !m_OrionEventQueue.empty() || !m_IsRunning; });
+
+        // Get the event from the queue
+        if (!m_OrionEventQueue.empty())
+        {
+            const auto [Event, Data] = m_OrionEventQueue.front();
+            m_OrionEventQueue.pop();
+
+            // Unlock the mutex
+            Lock.unlock();
+
+            // Lock the OrionEventClients mutex
+            std::lock_guard<std::mutex> OrionEventClientsLockGuard(m_OrionEventClientsMutex);
+
+            // Loop through all the connected clients and send the event
+            for (const auto& Client : m_OrionEventClients)
+            {
+                // Format the Server-Sent Event
+                std::ostringstream SSEEvent;
+                SSEEvent << "event: " << Event << "\n";
+                SSEEvent << "data: " << Data.serialize() << "\n\n";
+                SSEEvent << std::flush;
+
+                auto ResponseStream = Client.create_ostream();
+                ResponseStream.print(SSEEvent.str()).get();
+                ResponseStream.flush().wait();
+            }
+        }
+    }
 }

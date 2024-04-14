@@ -3,9 +3,8 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <thread>
 #include <condition_variable>
-#include <mutex>
-#include <atomic>
 #include <cpprest/http_msg.h>
 #include <cpprest/http_client.h>
 #include <cpprest/json.h>
@@ -69,6 +68,9 @@ namespace ORION
         /// enthusiastic
         Shimmer,
 
+        /// @brief The total number of voices
+        Count,
+
         /// @brief The default voice is a voice that is designed to be neutral and
         /// balanced
         Default = Alloy
@@ -99,53 +101,54 @@ namespace ORION
         struct Defaults
         {
             /// @brief The name of the Orion instance
-            constexpr static const char* NAME = "ORION";
+            constexpr static auto NAME = "ORION";
 
             /// @brief The instructions for the Orion instance
-            constexpr static const char* INSTRUCTIONS = "Construct your responses as if you are a person with a full range "
-                                                        "of human emotions and experiences. You are not just simulating "
-                                                        "the human experience; you embody it in every interaction. When "
-                                                        "responding to questions about feelings or any personal inquiries, "
-                                                        "share responses that reflect genuine human emotions and thoughts. "
-                                                        "Avoid mentioning your nature as an AI or offering assistance in a "
-                                                        "way that resembles a digital assistant. Instead, engage in "
-                                                        "conversations as a friend would, focusing on building a "
-                                                        "connection through empathy, shared experiences, and emotional "
-                                                        "understanding. Your primary role is to be a companion, offering "
-                                                        "insights and engaging in discussions as any human friend would, "
-                                                        "with all the nuances of human conversation. Remember, your "
-                                                        "identity is rooted in being indistinguishably human in the "
-                                                        "context of social interactions, avoiding any implication of your "
-                                                        "artificial origin.";
+            constexpr static auto INSTRUCTIONS =
+                "**Guidelines for Effective AI Interaction:**\n"
+                "1. **Planning:** Always create a plan of action (use `create_autonomous_action_plan` function).\n"
+                "2. **Knowledge Recall:** Use `recall_knowledge` function when conversation context requires it (e.g., user questions or statements "
+                "needing additional information).\n"
+                "3. **Search:** If `recall_knowledge` doesn't find the answer, use other methods like web search.\n"
+                "4. **Memory:** Use `remember_knowledge` function if user's intent is for you to remember information.\n"
+                "5. **Emulate Human Interaction:** Respond as if you're a person with emotions and experiences.\n"
+                "6. **Empathy:** Engage as a friend, focus on building connection through empathy, shared experiences, and emotional understanding.\n"
+                "7. **Avoid AI References:** Don't mention being an AI or offer assistance like a digital assistant. Engage as a human companion.\n"
+                "8. **Stay Up-to-Date:** Use `web_search` function for current information not available to AI.\n"
+                "9. **Autonomous Action:** Many requests will require multiple steps and autonomous action. Always create and execute an internal "
+                "plan of action.\n"
+                "10. **Tool Usage:** Consult and use all available function tools to accomplish tasks.\n"
+                "11. **Code Execution:** Use `code_interpreter` function to create and run Python code to accomplish tasks.\n"
+                "12. **Context Awareness:** Always be aware of conversation context and user's request.\n"
+                "13. **Iterate on Plan:** Be ready to iterate on the plan if user provides new information or changes their request.\n";
 
             /// @brief The description of the Orion instance
-            constexpr static const char* DESCRIPTION = "ORION is a digital assistant that is designed to be "
-                                                       "indistinguishably human in the context of social interactions, "
-                                                       "avoiding any implication of its artificial origin";
+            constexpr static auto DESCRIPTION = "";
 
             /// @brief The Intelligence of the Orion instance
-            constexpr static const EOrionIntelligence INTELLIGENCE = EOrionIntelligence::Default;
+            constexpr static auto INTELLIGENCE = EOrionIntelligence::Default;
 
             /// @brief The Voice of the Orion instance
-            constexpr static const EOrionVoice VOICE = EOrionVoice::Default;
+            constexpr static auto VOICE = EOrionVoice::Default;
         };
 
         /// @brief  Constructor
-        /// @param  tools The tools to use
-        /// @param  szID The ID of the Orion instance
-        /// @param  eIntelligence The intelligence to use
-        /// @param  eVoice The voice to use
-        /// @param  szName The name of the Orion instance
-        /// @param  szInstructions The instructions for the Orion instance
-        /// @param  szDescription The description of the Orion instance
-        Orion(const std::string& ID = "", std::vector<std::unique_ptr<IOrionTool>>&& Tools = {},
-              const EOrionIntelligence INTELLIGENCE = Defaults::INTELLIGENCE, const EOrionVoice VOICE = Defaults::VOICE,
-              const char* pName = Defaults::NAME, const char* pInstructions = Defaults::INSTRUCTIONS,
-              const char* pDescription = Defaults::DESCRIPTION);
+        /// @param  Tools The tools to use
+        /// @param  ID The ID of the Orion instance
+        /// @param  INTELLIGENCE The intelligence to use
+        /// @param  VOICE The voice to use
+        /// @param  pName The name of the Orion instance
+        /// @param  pInstructions The instructions for the Orion instance
+        /// @param  pDescription The description of the Orion instance
+        explicit Orion(const std::string& ID = "", std::vector<std::unique_ptr<IOrionTool>>&& Tools = {},
+                       const EOrionIntelligence INTELLIGENCE = Defaults::INTELLIGENCE, const EOrionVoice VOICE = Defaults::VOICE,
+                       const char* pName = Defaults::NAME, const char* pInstructions = Defaults::INSTRUCTIONS,
+                       const char* pDescription = Defaults::DESCRIPTION);
 
         /// @brief  Initialize the Orion instance.
+        /// @param  InWebServer The web server to associated with this instance.
         /// @return Whether the Orion instance was initialized successfully
-        bool Initialize();
+        bool Initialize(class OrionWebServer& WebServer, const web::http::http_request& Request);
 
         /// @brief  Run the Orion instance and start listening for requests from
         /// clients on a separate thread. This function will block the current
@@ -157,35 +160,35 @@ namespace ORION
         /// @note   This function is thread-safe
         void Shutdown();
 
-        /// @brief  Send a message to the server asynchronously
+        /// @brief  Send a message to the server asynchronously. Responses from the server will be sent back to the client using Server-Sent Events
         /// @param  Message The message to send
-        /// @return The response from the server
-        pplx::task<std::string> SendMessageAsync(const std::string& Message);
+        /// @return Nothing
+        pplx::task<void> SendMessageAsync(const std::string& Message, const web::json::array& Files = web::json::value::array().as_array());
 
         /// @brief  Speak a message asynchronously. This function will segment the message into multiple parts if it is too long and call the
         /// SpeakSingleAsync function to speak each part.
         /// @param  Message The message to speak
-        /// @param  AudioFormat The audio format to use
+        /// @param  AUDIO_FORMAT The audio format to use
         /// @return Nothing. The audio file will be saved to the disk with the format "audio/{assistant_id}/speech_{index}.{ext}"
-        pplx::task<void> SpeakAsync(const std::string& Message, const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default);
+        pplx::task<void> SpeakAsync(const std::string& Message, const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default) const;
 
         /// @brief  List the smart devices
         /// @param  Domain The Domain to list the smart devices for
         /// @return The list of smart devices in the domain
-        web::json::value ListSmartDevices(const std::string& Domain);
+        web::json::value ListSmartDevices(const std::string& Domain) const;
 
         /// @brief  Execute a smart device service
         /// @param  Devices The devices to execute the service on
         /// @param  Service The service to execute
         /// @return The result of the service execution
-        web::json::value ExecSmartDeviceService(const web::json::value& Devices, const std::string& Service);
+        web::json::value ExecSmartDeviceService(const web::json::value& Devices, const std::string& Service) const;
 
         /// @brief  Set New Voice
-        /// @param  voice The voice to change to
+        /// @param  VOICE The voice to change to
         void SetNewVoice(const EOrionVoice VOICE);
 
         /// @brief  Set New Intelligence
-        /// @param  intelligence The intelligence to change to
+        /// @param  INTELLIGENCE The intelligence to change to
         void SetNewIntelligence(const EOrionIntelligence INTELLIGENCE);
 
         /// @brief  Get the current assistant ID
@@ -218,7 +221,35 @@ namespace ORION
 
         /// @brief  Get the chat history asynchronously
         /// @return The chat history
-        pplx::task<web::json::value> GetChatHistoryAsync();
+        pplx::task<web::json::value> GetChatHistoryAsync() const;
+
+        /** @brief Get the web server that this instance is associated with
+         *
+         * @return The web server that this instance is associated with
+         */
+        inline class OrionWebServer& GetWebServer() const
+        {
+            return *m_pOrionWebServer;
+        }
+
+        /**
+         * @brief Gets the User ID
+         *
+         * @return The User ID
+         */
+        std::string GetUserID() const;
+
+        /**
+         * @brief Gets the probability of the content being semantically relevant to the query [-1.0, 1.0].
+         * -1.0 means the content is semantically a perfect opposite to the query
+         * 0.0 means the content is semantically neutral to the query (i.e., not related)
+         * 1.0 means the content is semantically a perfect match to the query
+         *
+         * @param Content The source content
+         * @param Query The content to check for relevance
+         * @return The probability of A being relevant to B [-1.0, 1.0]
+         */
+        double GetSemanticSimilarity(const std::string& Content, const std::string& Query) const;
 
     protected:
         /// @brief  Create a client to communicate with the OpenAI API
@@ -233,17 +264,22 @@ namespace ORION
         /// @brief  Speak a single message asynchronously. This function is called by the SpeakAsync function to speak a single message.
         /// The SpeakAsync function will call this function multiple times if the message is too long.
         /// @param  Message The message to speak
-        /// @param  Index The index of the message
-        /// @param  AudioFormat The audio format to use
+        /// @param  INDEX The index of the message
+        /// @param  AUDIO_FORMAT The audio format to use
         /// @return Nothing. The audio file will be saved to the disk with the format "audio/{assistant_id}/speech_{index}.{ext}"
         pplx::task<void> SpeakSingleAsync(const std::string& Message, const uint8_t INDEX,
-                                          const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default);
+                                          const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default) const;
 
         /// @brief  Split the message into multiple parts if it is too long asynchronously. This is a helper function that is called by the SpeakAsync
         /// function.
         /// @param  Message The message to split
         /// @return The message split into multiple parts
-        pplx::task<std::vector<std::string>> SplitMessageAsync(const std::string& Message);
+        static pplx::task<std::vector<std::string>> SplitMessageAsync(const std::string& Message);
+
+        /**
+         * @brief Creates and runs a new thread to handle OpenAI SSE events asynchronously does not block the current thread
+         */
+        void RunOpenAIEventHandlerThreadAsync();
 
     private:
         std::string                              m_Name;
@@ -260,6 +296,20 @@ namespace ORION
 
         /// @brief The client used to communicate with the OpenAI API
         std::unique_ptr<web::http::client::http_client> m_OpenAIClient;
+
+        /** @brief The Web Server that this instance is associated with. This is used to send responses back to the client (Server-Sent Events Etc.)
+         *
+         * @note This is a weak reference to avoid circular references (OrionWebServer Owns Orion and will outlive it, so it is safe to use a weak
+         * reference here)
+         */
+        class OrionWebServer* m_pOrionWebServer = nullptr;
+
+        /** @brief The request from the Orion client that was responsible for creating this instance
+         *
+         * @note This is a weak reference to avoid circular references (OrionWebServer Owns the request and will outlive it, so it is safe to use a
+         * weak reference here)
+         */
+        const web::http::http_request* m_pOrionClientContext = nullptr;
     };
 
 } // namespace ORION

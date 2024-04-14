@@ -17,7 +17,7 @@ CheckOptions:
   - key: readability-identifier-naming.EnumConstantCase
     value: CamelCase
   - key: readability-identifier-naming.EnumPrefix
-    value: E
+    value: 'E'
   - key: readability-identifier-naming.ParameterCase
     value: CamelCase
   - key: readability-identifier-naming.ConstantParameterCase
@@ -29,13 +29,13 @@ CheckOptions:
   - key: readability-identifier-naming.StaticConstantCase
     value: UPPER_CASE
   - key: readability-identifier-naming.LocalPointerPrefix
-    value: p
+    value: 'p'
   - key: readability-identifier-naming.PointerParameterPrefix
-    value: p
+    value: 'p'
   - key: readability-identifier-naming.ConstantPointerParameterPrefix
-    value: p
+    value: 'p'
   - key: readability-identifier-naming.ConstantPointerPrefix
-    value: p
+    value: 'p'
   - key: readability-identifier-naming.LocalVariableCase
     value: CamelCase
   - key: readability-identifier-naming.MacroDefinitionCase

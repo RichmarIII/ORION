@@ -58,5 +58,15 @@ const std::map<std::string, std::string> MimeTypes::MIME_TYPES_MAP = {
     {"7z", "application/x-7z-compressed"},   // 7-Zip Archive
     {"tar", "application/x-tar"},            // Tape Archive
     {"gz", "application/gzip"},              // Gzip Archive
-    {"bz2", "application/x-bzip2"}           // Bzip2 Archive
+    {"bz2", "application/x-bzip2"},          // Bzip2 Archive
+    // Common Document Files
+    {"pdf", "application/pdf"},                                                            // Portable Document Format
+    {"doc", "application/msword"},                                                         // Microsoft Word
+    {"docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},   // Microsoft Word
+    {"xls", "application/vnd.ms-excel"},                                                   // Microsoft Excel
+    {"xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},         // Microsoft Excel
+    {"ppt", "application/vnd.ms-powerpoint"},                                              // Microsoft PowerPoint
+    {"pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"}, // Microsoft PowerPoint
+    {"odt", "application/vnd.oasis.opendocument.text"},                                    // OpenDocument Text
+    {"ods", "application/vnd.oasis.opendocument.spreadsheet"},                             // OpenDocument Spreadsheet
 };

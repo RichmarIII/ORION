@@ -4,6 +4,7 @@
 .venv/
 .vscode/
 .history/
+.idea/
 build/
 src/generated/**
 index_preview.html
@@ -11,3 +12,6 @@ embeddings.py
 user-info.json
 cert.pem
 key.pem
+
+#Ignore all folders that contain build in the name (e.g. build, build2, cmake-build3-etc)
+*build*/

@@ -5,7 +5,7 @@
 namespace ORION
 {
     /// @brief  A tool that can access and analyze data uploaded to the server
-    class RetrievalTool : public IOrionTool
+    class RetrievalTool final : public IOrionTool
     {
     public:
         inline EOrionToolType GetType() const override

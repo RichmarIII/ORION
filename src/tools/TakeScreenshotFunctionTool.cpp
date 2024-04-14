@@ -3,7 +3,7 @@
 
 using namespace ORION;
 
-std::string TakeScreenshotFunctionTool::Execute(Orion& Orion, const web::json::value& PARAMETERS)
+std::string TakeScreenshotFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     // Cross-platform screenshot code
 

@@ -5,13 +5,13 @@
 namespace ORION
 {
     /// @brief  A tool that executes a smart device service
-    class ExecSmartDeviceServiceFunctionTool : public FunctionTool
+    class ExecSmartDeviceServiceFunctionTool final : public FunctionTool
     {
     public:
         struct Statics
         {
             /// @brief A function that executes a smart device service in the home provided by home-assistant api
-            constexpr static const char* EXEC_SMART_DEVICE_SERVICE = R"(
+            constexpr static auto EXEC_SMART_DEVICE_SERVICE = R"(
             {
                 "description" : "Executes a smart device service in the home provided by home-assistant api. only devices that are listed in the list_smart_devices response can be used",
                 "name" : "exec_smart_device_service",

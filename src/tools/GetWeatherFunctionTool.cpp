@@ -3,20 +3,20 @@
 
 using namespace ORION;
 
-std::string GetWeatherFunctionTool::Execute(Orion& Orion, const web::json::value& PARAMETERS)
+std::string GetWeatherFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     // Default units is "imperial"
     std::string Units = "imperial";
-    if (PARAMETERS.has_field("units"))
+    if (Parameters.has_field("units"))
     {
-        Units = PARAMETERS.at("units").as_string();
+        Units = Parameters.at("units").as_string();
     }
 
     // Default location is "New York, US"
     std::string Location = "New York, US";
-    if (PARAMETERS.has_field("location"))
+    if (Parameters.has_field("location"))
     {
-        Location = PARAMETERS.at("location").as_string();
+        Location = Parameters.at("location").as_string();
     }
 
     // Create a new http_client to send the request
@@ -37,17 +37,17 @@ std::string GetWeatherFunctionTool::Execute(Orion& Orion, const web::json::value
     GetWeatherRequest.set_request_uri(GetWeatherRequestURIBuilder.to_string());
 
     // Send the request and get the response
-    web::http::http_response GetWeatherResponse = OpenWeatherMapClient.request(GetWeatherRequest).get();
 
-    if (GetWeatherResponse.status_code() == web::http::status_codes::OK)
+    if (const web::http::http_response GET_WEATHER_RESPONSE = OpenWeatherMapClient.request(GetWeatherRequest).get();
+        GET_WEATHER_RESPONSE.status_code() == web::http::status_codes::OK)
     {
-        web::json::value ResponseDataJson = GetWeatherResponse.extract_json().get();
-        return ResponseDataJson.serialize();
+        const web::json::value RESPONSE_DATA_JSON = GET_WEATHER_RESPONSE.extract_json().get();
+        return RESPONSE_DATA_JSON.serialize();
     }
     else
     {
         std::cerr << "Failed to get the weather" << std::endl;
-        std::cout << GetWeatherResponse.to_string() << std::endl;
-        return std::string(R"({"message": "Failed to get the weather. )" + GetWeatherResponse.to_string() + R"("})");
+        std::cout << GET_WEATHER_RESPONSE.to_string() << std::endl;
+        return std::string(R"({"message": "Failed to get the weather. )" + GET_WEATHER_RESPONSE.to_string() + R"("})");
     }
 }

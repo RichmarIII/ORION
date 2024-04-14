@@ -5,15 +5,14 @@
 
 namespace ORION
 {
-    struct MimeTypes
+    struct MimeTypes final
     {
         /// @brief Get the Mime Type for a given file name
         /// @param FileName File Name
         /// @return Mime Type
         static std::string GetMimeType(const std::string& FileName)
         {
-            const auto HAS_EXTENSION = FileName.find_last_of('.') != std::string::npos;
-            if (!HAS_EXTENSION)
+            if (const auto HAS_EXTENSION = FileName.find_last_of('.') != std::string::npos; !HAS_EXTENSION)
             {
                 return OCTET_STREAM;
             }

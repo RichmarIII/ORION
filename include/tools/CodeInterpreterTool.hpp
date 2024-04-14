@@ -5,7 +5,7 @@
 namespace ORION
 {
     /// @brief  A tool that can run and interpret python code
-    class CodeInterpreterTool : public IOrionTool
+    class CodeInterpreterTool final : public IOrionTool
     {
     public:
         inline EOrionToolType GetType() const override

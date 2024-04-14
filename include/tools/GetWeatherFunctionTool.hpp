@@ -5,13 +5,13 @@
 namespace ORION
 {
     /// @brief  A tool that can get the weather for a location
-    class GetWeatherFunctionTool : public FunctionTool
+    class GetWeatherFunctionTool final : public FunctionTool
     {
     public:
         struct Statics
         {
             /// @brief A function that gets the weather for a location
-            constexpr static const char* GET_WEATHER = R"(
+            constexpr static auto GET_WEATHER = R"(
             {
                 "description" : "Gets the weather for a location",
                 "name" : "get_weather",

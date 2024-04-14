@@ -3,12 +3,11 @@
 
 using namespace ORION;
 
-std::string ChangeIntelligenceFunctionTool::Execute(Orion& Orion, const web::json::value& PARAMETERS)
+std::string ChangeIntelligenceFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {
-        const auto SHOULD_CHANGE_INTELLIGENCE = !PARAMETERS.at("list").as_bool();
-        if (!SHOULD_CHANGE_INTELLIGENCE)
+        if (const auto SHOULD_CHANGE_INTELLIGENCE = !Parameters.at("list").as_bool(); !SHOULD_CHANGE_INTELLIGENCE)
         {
             // Wants to list the available intelligences
             web::json::value Json    = web::json::value::object();
@@ -21,8 +20,7 @@ std::string ChangeIntelligenceFunctionTool::Execute(Orion& Orion, const web::jso
         else
         {
             // Wants to change the intelligence
-            const std::string INTELLIGENCE = PARAMETERS.at("intelligence").as_string();
-            if (INTELLIGENCE == "base")
+            if (const std::string INTELLIGENCE = Parameters.at("intelligence").as_string(); INTELLIGENCE == "base")
             {
                 Orion.SetNewIntelligence(EOrionIntelligence::Base);
                 return std::string(R"({"message": "Changed intelligence to base"})");

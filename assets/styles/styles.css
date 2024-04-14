@@ -135,6 +135,17 @@ input {
     background-color: #456;
 }
 
+.orion-message-container .message-status {
+    background: #456;
+    padding: 5px;
+
+    /*bold*/
+    font-weight: bold;
+
+    /*italic*/
+    font-style: italic;
+}
+
 #file-label {
     cursor: pointer;
     margin-right: 10px;

@@ -4,21 +4,21 @@
 namespace ORION
 {
     /// @brief The GUID class.
-    struct GUID
+    struct GUID final
     {
         /// @brief The GUID of the object. Should be set on instantiation.
-        /*const*/ std::string GUID;
+        /*const*/ std::string GUIDString;
 
         static struct GUID Generate();
 
-        operator std::string() const
+        explicit operator std::string() const
         {
-            return GUID;
+            return GUIDString;
         }
 
-        inline operator bool() const
+        explicit inline operator bool() const
         {
-            return !GUID.empty();
+            return !GUIDString.empty();
         }
     };
 } // namespace ORION

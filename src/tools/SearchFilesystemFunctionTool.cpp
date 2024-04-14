@@ -5,18 +5,18 @@
 
 using namespace ORION;
 
-std::string SearchFilesystemFunctionTool::Execute(Orion& Orion, const web::json::value& PARAMETERS)
+std::string SearchFilesystemFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {
         // Default directory is the users "Home" directory
-        std::filesystem::path SearchDirectory = std::filesystem::path(std::getenv("HOME"));
+        auto SearchDirectory = std::filesystem::path(std::getenv("HOME"));
 
         // Check if the parameters contain a directory
-        if (PARAMETERS.has_field("search_directory"))
+        if (Parameters.has_field("search_directory"))
         {
             // Set the search directory to the directory in the parameters
-            SearchDirectory = PARAMETERS.at("search_directory").as_string();
+            SearchDirectory = Parameters.at("search_directory").as_string();
         }
 
         // Check if directory exists
@@ -27,15 +27,15 @@ std::string SearchFilesystemFunctionTool::Execute(Orion& Orion, const web::json:
         }
 
         bool Recursive = false;
-        if (PARAMETERS.has_field("recursive"))
+        if (Parameters.has_field("recursive"))
         {
-            Recursive = PARAMETERS.at("recursive").as_bool();
+            Recursive = Parameters.at("recursive").as_bool();
         }
 
-        if (PARAMETERS.has_field("file_name"))
+        if (Parameters.has_field("file_name"))
         {
             // Get the file name from the parameters
-            std::string FileName = PARAMETERS.at("file_name").as_string();
+            std::string FileName = Parameters.at("file_name").as_string();
 
             std::vector<std::string> FileMatches;
 

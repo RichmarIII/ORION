@@ -5,13 +5,13 @@
 namespace ORION
 {
     /// @brief  A tool that can list the smart devices in the home
-    class ListSmartDevicesFunctionTool : public FunctionTool
+    class ListSmartDevicesFunctionTool final : public FunctionTool
     {
     public:
         struct Statics
         {
             /// @brief A function that lists the smart devices in the home
-            constexpr static const char* LIST_SMART_DEVICES = R"(
+            constexpr static auto LIST_SMART_DEVICES = R"(
             {
                 "description" : "Lists the smart devices in the home provided by home-assistant api. Must always be called before calling exec_smart_device_service to get the list of available devices.",
                 "name" : "list_smart_devices",

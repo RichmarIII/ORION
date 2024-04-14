@@ -3,14 +3,14 @@
 
 using namespace ORION;
 
-std::string ListSmartDevicesFunctionTool::Execute(Orion& Orion, const web::json::value& PARAMETERS)
+std::string ListSmartDevicesFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {
         // Wants to list the smart devices
-        std::string Domain = PARAMETERS.at("domain").as_string();
-        std::string Result = Orion.ListSmartDevices(Domain).serialize();
-        return Result;
+        const std::string DOMAIN = Parameters.at("domain").as_string();
+        const std::string RESULT = Orion.ListSmartDevices(DOMAIN).serialize();
+        return RESULT;
     }
     catch (const std::exception& Exception)
     {

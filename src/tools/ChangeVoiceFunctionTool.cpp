@@ -7,41 +7,57 @@ std::string ChangeVoiceFunctionTool::Execute(Orion& Orion, const web::json::valu
 {
     try
     {
+        if (!Parameters.has_field("voice"))
+        {
+            // Wants to list the available voices
+            auto JMessage = web::json::value::object();
+            auto JVoices  = web::json::value::array();
+
+            JVoices[JVoices.size()] = web::json::value::string("alloy");
+            JVoices[JVoices.size()] = web::json::value::string("echo");
+            JVoices[JVoices.size()] = web::json::value::string("fable");
+            JVoices[JVoices.size()] = web::json::value::string("nova");
+            JVoices[JVoices.size()] = web::json::value::string("onyx");
+            JVoices[JVoices.size()] = web::json::value::string("shimmer");
+
+            JMessage["message"] = JVoices;
+            return JMessage.serialize();
+        }
+
         // Wants to change the voice
-        std::string Voice = Parameters.at("voice").as_string();
-        if (Voice == "alloy")
+        if (const std::string VOICE = Parameters.at("voice").as_string(); VOICE == "alloy")
         {
             Orion.SetNewVoice(EOrionVoice::Alloy);
             return std::string(R"({"message": "Changed voice to alloy"})");
         }
-        else if (Voice == "echo")
+        else if (VOICE == "echo")
         {
             Orion.SetNewVoice(EOrionVoice::Echo);
             return std::string(R"({"message": "Changed voice to echo"})");
         }
-        else if (Voice == "fable")
+        else if (VOICE == "fable")
         {
             Orion.SetNewVoice(EOrionVoice::Fable);
             return std::string(R"({"message": "Changed voice to fable"})");
         }
-        else if (Voice == "nova")
+        else if (VOICE == "nova")
         {
             Orion.SetNewVoice(EOrionVoice::Nova);
             return std::string(R"({"message": "Changed voice to nova"})");
         }
-        else if (Voice == "onyx")
+        else if (VOICE == "onyx")
         {
             Orion.SetNewVoice(EOrionVoice::Onyx);
             return std::string(R"({"message": "Changed voice to onyx"})");
         }
-        else if (Voice == "shimmer")
+        else if (VOICE == "shimmer")
         {
             Orion.SetNewVoice(EOrionVoice::Shimmer);
             return std::string(R"({"message": "Changed voice to shimmer"})");
         }
         else
         {
-            std::cerr << "Unknown voice: " << Voice << std::endl;
+            std::cerr << "Unknown voice: " << VOICE << std::endl;
             return std::string(R"({"message": "Unknown voice"})");
         }
     }

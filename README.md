@@ -2,7 +2,7 @@
 
 ### What is ORION?
 
-Put simply - ORON is a state-of-the-art **Digital Assistant** that is backed by **Machine-Learning**.
+Put simply - ORION is a state-of-the-art **Digital Assistant** that is backed by **Machine-Learning**.
 
 ## The Essence of ORION
 

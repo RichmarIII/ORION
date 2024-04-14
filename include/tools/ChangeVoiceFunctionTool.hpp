@@ -5,16 +5,16 @@
 namespace ORION
 {
     /// @brief  A tool that can change the voice of the assistant
-    class ChangeVoiceFunctionTool : public FunctionTool
+    class ChangeVoiceFunctionTool final : public FunctionTool
     {
     public:
         struct Statics
         {
             /// @brief A function that changes the voice of the assistant
-            constexpr static const char* CHANGE_VOICE = R"(
+            constexpr static auto CHANGE_VOICE = R"(
             {
-                "description" : "Changes the voice of the assistant",
-                "name" : "change_voice",
+                "description" : "Changes the voice of the assistant. If no voice is provided, it will list the available voices.",
+                "name" : "change_or_list_voice",
                 "parameters" : {
                     "type" : "object",
                     "properties" : {
@@ -23,8 +23,7 @@ namespace ORION
                             "enum" : [ "alloy", "echo", "fable", "onyx", "nova", "shimmer" ],
                             "description" : "The voice to change to"
                         }
-                    },
-                    "required" : ["voice"]
+                    }
                 }
             })";
         };
