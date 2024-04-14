@@ -1,13 +1,12 @@
 #pragma once
-#include <cstdint>
-#include <string>
-#include <vector>
-#include <memory>
-#include <thread>
-#include <condition_variable>
-#include <cpprest/http_msg.h>
 #include <cpprest/http_client.h>
+#include <cpprest/http_msg.h>
 #include <cpprest/json.h>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
 
 #include "IOrionTool.hpp"
 
@@ -120,7 +119,10 @@ namespace ORION
                 "10. **Tool Usage:** Consult and use all available function tools to accomplish tasks.\n"
                 "11. **Code Execution:** Use `code_interpreter` function to create and run Python code to accomplish tasks.\n"
                 "12. **Context Awareness:** Always be aware of conversation context and user's request.\n"
-                "13. **Iterate on Plan:** Be ready to iterate on the plan if user provides new information or changes their request.\n";
+                "13. **Iterate on Plan:** Be ready to iterate on the plan if user provides new information or changes their request.\n"
+                "14. **Function Results:** All function results return JSON. The field `orion_instructions` is not part of the result but rather "
+                "instructions that the assistant MUST follow next. It is crucial that these instructions are adhered to in order to ensure the "
+                "correct functioning of the system.\n";
 
             /// @brief The description of the Orion instance
             constexpr static auto DESCRIPTION = "";
@@ -145,23 +147,18 @@ namespace ORION
                        const char* pName = Defaults::NAME, const char* pInstructions = Defaults::INSTRUCTIONS,
                        const char* pDescription = Defaults::DESCRIPTION);
 
-        /// @brief  Initialize the Orion instance.
-        /// @param  InWebServer The web server to associated with this instance.
-        /// @return Whether the Orion instance was initialized successfully
+        /**
+         * Initialize the Orion instance.
+         *
+         * @param WebServer The web server to associated with this instance.
+         * @param Request The request that created this instance.
+         * @return Whether the Orion instance was initialized successfully.
+         */
         bool Initialize(class OrionWebServer& WebServer, const web::http::http_request& Request);
-
-        /// @brief  Run the Orion instance and start listening for requests from
-        /// clients on a separate thread. This function will block the current
-        /// thread until Shutdown() is called
-        void Run();
-
-        /// @brief  Shutdown the Orion instance. This will stop the server and
-        /// unblock the current thread
-        /// @note   This function is thread-safe
-        void Shutdown();
 
         /// @brief  Send a message to the server asynchronously. Responses from the server will be sent back to the client using Server-Sent Events
         /// @param  Message The message to send
+        /// @param Files The files to send
         /// @return Nothing
         pplx::task<void> SendMessageAsync(const std::string& Message, const web::json::array& Files = web::json::value::array().as_array());
 
@@ -275,11 +272,6 @@ namespace ORION
         /// @param  Message The message to split
         /// @return The message split into multiple parts
         static pplx::task<std::vector<std::string>> SplitMessageAsync(const std::string& Message);
-
-        /**
-         * @brief Creates and runs a new thread to handle OpenAI SSE events asynchronously does not block the current thread
-         */
-        void RunOpenAIEventHandlerThreadAsync();
 
     private:
         std::string                              m_Name;

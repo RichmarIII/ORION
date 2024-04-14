@@ -1,27 +1,24 @@
 #include "Orion.hpp"
+#include "MimeTypes.hpp"
 #include "OrionWebServer.hpp"
 #include "tools/FunctionTool.hpp"
-#include "MimeTypes.hpp"
 
 // Include cpprestsdk headers
+#include <cpprest/containerstream.h>
 #include <cpprest/filestream.h>
 #include <cpprest/http_client.h>
 #include <cpprest/http_listener.h>
+#include <cpprest/http_msg.h>
+#include <cpprest/interopstream.h>
 #include <cpprest/json.h>
+#include <cpprest/producerconsumerstream.h>
 #include <cpprest/uri.h>
 #include <cpprest/ws_client.h>
-#include <cpprest/ws_msg.h>
-#include <cpprest/producerconsumerstream.h>
-#include <cpprest/containerstream.h>
-#include <cpprest/interopstream.h>
-#include <cpprest/http_msg.h>
 
 // Include cmark headers
 #include <cmark.h>
 
 // Include standard headers
-#include <chrono>
-#include <cpprest/http_msg.h>
 #include <filesystem>
 #include <thread>
 
@@ -45,7 +42,7 @@ Orion::Orion(const std::string& ID, std::vector<std::unique_ptr<IOrionTool>>&& T
     }
 }
 
-bool ORION::Orion::Initialize(OrionWebServer& WebServer, const web::http::http_request& Request)
+bool Orion::Initialize(OrionWebServer& WebServer, const web::http::http_request& Request)
 {
     m_pOrionWebServer     = &WebServer;
     m_pOrionClientContext = &Request;
@@ -88,17 +85,17 @@ double Orion::GetSemanticSimilarity(const std::string& Content, const std::strin
     VectorSearchRequest.set_body(VectorSearchRequestBody);
 
     // Send the request and get the response
-    auto VectorSearchResponse = m_OpenAIClient->request(VectorSearchRequest).get();
+    const auto VECTOR_SEARCH_RESPONSE = m_OpenAIClient->request(VectorSearchRequest).get();
 
-    if (VectorSearchResponse.status_code() != web::http::status_codes::OK)
+    if (VECTOR_SEARCH_RESPONSE.status_code() != web::http::status_codes::OK)
     {
         std::cerr << "Failed to create an embedding for the content" << std::endl;
-        std::cout << VectorSearchResponse.to_string() << std::endl;
+        std::cout << VECTOR_SEARCH_RESPONSE.to_string() << std::endl;
         return 0.0;
     }
 
     // Get the embedding
-    auto VectorSearchResponseJson = VectorSearchResponse.extract_json().get();
+    auto VectorSearchResponseJson = VECTOR_SEARCH_RESPONSE.extract_json().get();
     auto JEmbeddingArray          = VectorSearchResponseJson.at("data").as_array();
 
     // Calculate the similarity between the content and the query
@@ -109,7 +106,7 @@ double Orion::GetSemanticSimilarity(const std::string& Content, const std::strin
     double NormContent = 0.0;
     double NormQuery   = 0.0;
 
-    for (size_t i = 0; i < EMBEDDING_CONTENT.size(); ++i)
+    for (size_t i = 0; i < EMBEDDING_CONTENT.size(); ++i) // NOLINT(*-identifier-naming)
     {
         DotProduct += EMBEDDING_CONTENT.at(i).as_double() * EMBEDDING_QUERY.at(i).as_double();
         NormContent += EMBEDDING_CONTENT.at(i).as_double() * EMBEDDING_CONTENT.at(i).as_double();
@@ -250,12 +247,10 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                             while (true)
                             {
                                 concurrency::streams::container_buffer<std::string> LineBuff {};
-                                auto                                                ReadLineTask = EventStream.read_line(LineBuff);
-                                ReadLineTask.wait();
-                                const auto NumCharsRead = ReadLineTask.get();
+                                const auto NUM_CHARS_READ = EventStream.read_line(LineBuff).get();
                                 Line                    = LineBuff.collection();
 
-                                if (Line.empty())
+                                if (NUM_CHARS_READ <= 0)
                                 {
                                     // Log the event
                                     std::cout << "SSE Event name: " << EventName << std::endl;
@@ -392,9 +387,8 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                                                     const auto TOOL_NAME         = JFunctionToolCall.at("name").as_string();
                                                     const auto TOOL_ARGS = web::json::value::parse(JFunctionToolCall.at("arguments").as_string());
 
-                                                    auto ToolIt =
-                                                        std::find_if(m_Tools.begin(), m_Tools.end(),
-                                                                     [TOOL_NAME](const auto& Tool) { return Tool->GetName() == TOOL_NAME; });
+                                                    auto ToolIt = std::find_if(m_Tools.begin(), m_Tools.end(), [TOOL_NAME](const auto& Tool)
+                                                                               { return Tool->GetName() == TOOL_NAME; });
 
                                                     if (ToolIt != m_Tools.end())
                                                     {
@@ -474,13 +468,13 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                                 }
                                 else
                                 {
-                                    if (Line.find("event: ") == 0)
+                                    if (constexpr std::string_view EVENT_PREFIX = "event: "; Line.find(EVENT_PREFIX) == 0)
                                     {
-                                        EventName = Line.substr(7);
+                                        EventName = Line.substr(EVENT_PREFIX.length());
                                     }
-                                    else if (Line.find("data: ") == 0)
+                                    else if (constexpr std::string_view DATA_PREFIX = "data: "; Line.find(DATA_PREFIX) == 0)
                                     {
-                                        EventData += Line.substr(6);
+                                        EventData += Line.substr(DATA_PREFIX.length());
                                     }
                                 }
                             }
@@ -498,12 +492,12 @@ void Orion::CreateAssistant()
     ListAssistantsRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
     ListAssistantsRequest.headers().add("OpenAI-Beta", "assistants=v1");
 
-    web::http::http_response ListAssistantsResponse = m_OpenAIClient->request(ListAssistantsRequest).get();
+    const web::http::http_response LIST_ASSISTANTS_RESPONSE = m_OpenAIClient->request(ListAssistantsRequest).get();
 
     bool DoesAssistantExist = false;
-    if (ListAssistantsResponse.status_code() == web::http::status_codes::OK)
+    if (LIST_ASSISTANTS_RESPONSE.status_code() == web::http::status_codes::OK)
     {
-        web::json::value Json = ListAssistantsResponse.extract_json().get();
+        web::json::value Json = LIST_ASSISTANTS_RESPONSE.extract_json().get();
         for (const auto& Assistant : Json.at("data").as_array())
         {
             if (Assistant.at("id").as_string() == m_CurrentAssistantID)
@@ -547,14 +541,13 @@ void Orion::CreateAssistant()
 
         UpdateAssistantRequest.set_body(UpdateAssistantRequestBody);
 
-        web::http::http_response UpdateAssistantResponse = m_OpenAIClient->request(UpdateAssistantRequest).get();
-
-        if (UpdateAssistantResponse.status_code() != web::http::status_codes::OK)
+        if (const web::http::http_response UPDATE_ASSISTANT_RESPONSE = m_OpenAIClient->request(UpdateAssistantRequest).get();
+            UPDATE_ASSISTANT_RESPONSE.status_code() != web::http::status_codes::OK)
         {
             std::cerr << "Failed to update the assistant" << std::endl;
 
             // Print the response
-            std::cout << UpdateAssistantResponse.to_string() << std::endl;
+            std::cout << UPDATE_ASSISTANT_RESPONSE.to_string() << std::endl;
         }
     }
     else
@@ -586,11 +579,10 @@ void Orion::CreateAssistant()
 
         CreateAssistantRequest.set_body(CreateAssistantRequestBody);
 
-        web::http::http_response CreateAssistantResponse = m_OpenAIClient->request(CreateAssistantRequest).get();
-
-        if (CreateAssistantResponse.status_code() == web::http::status_codes::OK)
+        if (const web::http::http_response CREATE_ASSISTANT_RESPONSE = m_OpenAIClient->request(CreateAssistantRequest).get();
+            CREATE_ASSISTANT_RESPONSE.status_code() == web::http::status_codes::OK)
         {
-            web::json::value Json = CreateAssistantResponse.extract_json().get();
+            web::json::value Json = CREATE_ASSISTANT_RESPONSE.extract_json().get();
             m_CurrentAssistantID  = Json.at("id").as_string();
         }
         else
@@ -598,7 +590,7 @@ void Orion::CreateAssistant()
             std::cerr << "Failed to create a new assistant" << std::endl;
 
             // Print the response
-            std::cout << CreateAssistantResponse.to_string() << std::endl;
+            std::cout << CREATE_ASSISTANT_RESPONSE.to_string() << std::endl;
         }
     }
 }
@@ -613,11 +605,10 @@ void Orion::CreateThread()
     CreateThreadRequest.headers().add("Content-Type", "application/json");
     CreateThreadRequest.set_body(web::json::value::object());
 
-    web::http::http_response CreateThreadResponse = m_OpenAIClient->request(CreateThreadRequest).get();
-
-    if (CreateThreadResponse.status_code() == web::http::status_codes::OK)
+    if (const web::http::http_response CREATE_THREAD_RESPONSE = m_OpenAIClient->request(CreateThreadRequest).get();
+        CREATE_THREAD_RESPONSE.status_code() == web::http::status_codes::OK)
     {
-        web::json::value ResponseDataJson = CreateThreadResponse.extract_json().get();
+        web::json::value ResponseDataJson = CREATE_THREAD_RESPONSE.extract_json().get();
         m_CurrentThreadID                 = ResponseDataJson.at("id").as_string();
     }
     else
@@ -872,7 +863,7 @@ pplx::task<web::json::value> Orion::GetChatHistoryAsync() const
     ListMessagesRequest.headers().add("OpenAI-Beta", "assistants=v1");
 
     // Check if the query parameter is present
-    bool IsMarkdownRequested = ListMessagesRequest.request_uri().query().find(U("markdown=true")) != std::string::npos;
+    const bool IS_MARKDOWN_REQUESTED = ListMessagesRequest.request_uri().query().find(U("markdown=true")) != std::string::npos;
 
     // Send the request and get the response
     return m_OpenAIClient->request(ListMessagesRequest)
@@ -902,7 +893,7 @@ pplx::task<web::json::value> Orion::GetChatHistoryAsync() const
                                             // Add the message to the chat history
                                             auto Msg = Content.at("text").at("value").as_string();
 
-                                            if (IsMarkdownRequested)
+                                            if (IS_MARKDOWN_REQUESTED)
                                             {
                                                 char* pMarkdown = cmark_markdown_to_html(Msg.c_str(), Msg.length(), CMARK_OPT_DEFAULT);
                                                 Msg             = pMarkdown;

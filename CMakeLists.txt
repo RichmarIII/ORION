@@ -88,6 +88,7 @@ set(HEADERS
         include/tools/RememberKnowledgeFunctionTool.hpp
         include/tools/RecallKnowledgeFunctionTool.hpp
         include/tools/UpdateKnowledgeFunctionTool.hpp
+        include/MiscConstants.hpp
 )
 
 # Define the executable based on the explicitly listed source files

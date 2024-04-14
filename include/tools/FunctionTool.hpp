@@ -33,10 +33,12 @@ namespace ORION
             return web::json::value::parse(U(m_Function)).at("name").as_string();
         }
 
-        /// @brief  Execute the function
+        /// @brief  Execute the function. Must return a json object serialized to a string. Use the web::json::value::serialize() function to do this.
+        /// May contain special fields as defined by the standard. One such field is is MiscConstants::NAME_ORION_INSTRUCTIONS
         /// @param  Orion The Orion instance
         /// @param  Parameters The parameters to pass to the function
-        /// @return The result of the function as a json string
+        ///
+        /// @return The result of the function as a json object serialized to a string.
         virtual std::string Execute(class Orion& Orion, const web::json::value& Parameters) = 0;
 
     private:

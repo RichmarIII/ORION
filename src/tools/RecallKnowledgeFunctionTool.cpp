@@ -15,13 +15,13 @@ std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
         // const auto KNOWLEDGE_TYPES = Parameters.at(U("knowledge_types")).as_array();
 
         // Force all knowledge types for now
-        web::json::array KNOWLEDGE_TYPES = web::json::value::array().as_array();
-        KNOWLEDGE_TYPES[0]               = web::json::value::string(U("user_personal_info"));
-        KNOWLEDGE_TYPES[1]               = web::json::value::string(U("user_interests"));
-        KNOWLEDGE_TYPES[2]               = web::json::value::string(U("family_personal_info"));
-        KNOWLEDGE_TYPES[3]               = web::json::value::string(U("family_interests"));
-        KNOWLEDGE_TYPES[4]               = web::json::value::string(U("user_preferences"));
-        KNOWLEDGE_TYPES[5]               = web::json::value::string(U("unknown"));
+        web::json::array KnowledgeTypes = web::json::value::array().as_array();
+        KnowledgeTypes[0]               = web::json::value::string(U("user_personal_info"));
+        KnowledgeTypes[1]               = web::json::value::string(U("user_interests"));
+        KnowledgeTypes[2]               = web::json::value::string(U("family_personal_info"));
+        KnowledgeTypes[3]               = web::json::value::string(U("family_interests"));
+        KnowledgeTypes[4]               = web::json::value::string(U("user_preferences"));
+        KnowledgeTypes[5]               = web::json::value::string(U("unknown"));
 
         // Get the knowledge subject
         const auto KNOWLEDGE_SUBJECT_ARRAY = Parameters.at(U("knowledge_subject_and_tags")).as_array();
@@ -37,9 +37,9 @@ std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
         }();
 
         // Create a json array to store matching memory fragments
-        web::json::value JMatchingMemoryFragmentResults = web::json::value::array().array();
+        web::json::value JMatchingMemoryFragmentResultsArray = web::json::value::array();
 
-        for (const auto& KT : KNOWLEDGE_TYPES)
+        for (const auto& KT : KnowledgeTypes)
         {
             const auto KNOWLEDGE_TYPE = KT.as_string();
 
@@ -81,33 +81,15 @@ std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
             const auto APP_RELATIVE_KNOWLEDGE_DIR = OrionWebServer::AssetDirectories::ResolveUserKnowledgeDir(USER_ID);
 
             // Get the path to the database file
-            const auto DatabaseFilePath = std::filesystem::path(APP_RELATIVE_KNOWLEDGE_DIR) / DatabaseFileName;
+            const auto DATABASE_FILE_PATH = std::filesystem::path(APP_RELATIVE_KNOWLEDGE_DIR) / DatabaseFileName;
 
             // Create the database directories if they don't exist
-            std::filesystem::create_directories(DatabaseFilePath.parent_path());
+            std::filesystem::create_directories(DATABASE_FILE_PATH.parent_path());
 
-            std::stringstream DatabaseFileContents {};
-            {
-                // Read the knowledge database (Entire file for now) (TODO: Vector search)
+            std::ifstream DatabaseFileSteam{DATABASE_FILE_PATH};
 
-                // Open the database file
-                std::ifstream DatabaseFile(DatabaseFilePath);
-
-                // Check if the file is open
-                if (!DatabaseFile.is_open())
-                {
-                    std::cout << "Failed to open the database file: " << DatabaseFilePath << std::endl;
-                    continue;
-                }
-
-                // Read the entire file
-                DatabaseFileContents << std::string((std::istreambuf_iterator<char>(DatabaseFile)), std::istreambuf_iterator<char>());
-            }
-
-            DatabaseFileContents.seekg(0);
-
-            // Database is empty
-            if (DatabaseFileContents.str().empty())
+            // Database failed to open
+            if (!DatabaseFileSteam.is_open())
             {
                 web::json::value JSearchResults                 = web::json::value::object();
                 JSearchResults[U("instructions_for_assistant")] = web::json::value::string(
@@ -118,13 +100,13 @@ std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
             }
 
             // Json Memory Fragment
-            web::json::value JMemoryFragments = web::json::value::array();
+            web::json::array JMemoryFragments = web::json::value::array().as_array();
 
             // Each memory fragment is separated by a newline
-            while (DatabaseFileContents && !DatabaseFileContents.eof())
+            while (DatabaseFileSteam && !DatabaseFileSteam.eof())
             {
                 std::string MemoryFragment;
-                std::getline(DatabaseFileContents, MemoryFragment);
+                std::getline(DatabaseFileSteam, MemoryFragment);
 
                 if (MemoryFragment.empty())
                 {
@@ -138,11 +120,11 @@ std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
             std::vector<std::pair<web::json::value, double>> MatchingMemoryFragments;
 
             // For each memory fragment, check if the knowledge subject matches
-            for (const auto& MemoryFragment : JMemoryFragments.as_array())
+            for (const auto& MemoryFragment : JMemoryFragments)
             {
-                const auto SUBJECT_SIMILARITY =
-                    Orion.GetSemanticSimilarity(KNOWLEDGE_SUBJECT, MemoryFragment.at(U("knowledge_subject_and_tags")).as_string());
-                if (SUBJECT_SIMILARITY > 0.3)
+                if (const auto SUBJECT_SIMILARITY =
+                        Orion.GetSemanticSimilarity(KNOWLEDGE_SUBJECT, MemoryFragment.at(U("knowledge_subject_and_tags")).as_string());
+                    SUBJECT_SIMILARITY > 0.3)
                 {
                     MatchingMemoryFragments.push_back({MemoryFragment, SUBJECT_SIMILARITY});
                 }
@@ -159,17 +141,17 @@ std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
             }
 
             // Add the matching memory fragments to the json array
-            for (const auto& MatchingMemoryFragment : MatchingMemoryFragments)
+            for (const auto& [MemFragment, CosSimilarity] : MatchingMemoryFragments)
             {
                 web::json::value FragmentResult        = web::json::value::object();
-                FragmentResult[U("cosine_similarity")] = web::json::value::number(MatchingMemoryFragment.second);
-                FragmentResult[U("knowledge")]         = web::json::value::string(MatchingMemoryFragment.first.serialize());
-                JMatchingMemoryFragmentResults[JMatchingMemoryFragmentResults.size()] = FragmentResult;
+                FragmentResult[U("cosine_similarity")] = web::json::value::number(CosSimilarity);
+                FragmentResult[U("knowledge")]         = web::json::value::string(MemFragment.serialize());
+                JMatchingMemoryFragmentResultsArray[JMatchingMemoryFragmentResultsArray.size()] = FragmentResult;
             }
         }
 
         // If no matching memory fragments were found
-        if (JMatchingMemoryFragmentResults.size() == 0)
+        if (JMatchingMemoryFragmentResultsArray.size() == 0)
         {
             web::json::value JSearchResults = web::json::value::object();
             JSearchResults[U("next_function")] =
@@ -179,7 +161,7 @@ std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
 
         // Return the knowledge
         web::json::value JSearchResults             = web::json::value::object();
-        JSearchResults[U("recalled_memories")]      = JMatchingMemoryFragmentResults;
+        JSearchResults[U("recalled_memories")]      = JMatchingMemoryFragmentResultsArray;
         JSearchResults[U("instructions_for_orion")] = web::json::value::string(
             U("Recalled memory. These are the most similar memories, sorted by most relevant first. Use the knowledge to help the user with their "
               "request/statement. If the knowledge is not"
