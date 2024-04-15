@@ -21,12 +21,12 @@ namespace ORION
     /// @brief An interface for all tools that ORION supports
     struct IOrionTool
     {
-        virtual ~IOrionTool()                    = default;
-        IOrionTool()                             = default;
-        IOrionTool(const IOrionTool&)            = default;
-        IOrionTool(IOrionTool&&)                 = default;
-        IOrionTool& operator=(const IOrionTool&) = default;
-        IOrionTool& operator=(IOrionTool&&)      = default;
+        virtual ~   IOrionTool()                  = default;
+                    IOrionTool()                  = default;
+                    IOrionTool(const IOrionTool&) = default;
+                    IOrionTool(IOrionTool&&)      = default;
+        IOrionTool& operator=(const IOrionTool&)  = default;
+        IOrionTool& operator=(IOrionTool&&)       = default;
 
         /// @brief  Get the type of the tool
         virtual EOrionToolType GetType() const = 0;

@@ -40,7 +40,9 @@ namespace ORION
             })";
         };
 
-        inline RememberKnowledgeFunctionTool() : FunctionTool(Statics::REMEMBER_KNOWLEDGE)
+        inline
+        RememberKnowledgeFunctionTool()
+            : FunctionTool(Statics::REMEMBER_KNOWLEDGE)
         {
         }
 

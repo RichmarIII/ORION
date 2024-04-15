@@ -8,17 +8,20 @@ namespace ORION
     class CodeInterpreterTool final : public IOrionTool
     {
     public:
-        inline EOrionToolType GetType() const override
+        inline EOrionToolType
+        GetType() const override
         {
             return EOrionToolType::CodeInterpreter;
         }
 
-        inline std::string ToJson() const override
+        inline std::string
+        ToJson() const override
         {
             return R"({"type":"code_interpreter"})";
         }
 
-        inline std::string GetName() const override
+        inline std::string
+        GetName() const override
         {
             return "code_interpreter";
         }

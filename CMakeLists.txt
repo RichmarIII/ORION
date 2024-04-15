@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.18)
 
 # Set the cmake toolchain file to use
 set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
@@ -100,10 +100,18 @@ find_package(cmark CONFIG REQUIRED)
 find_path(SQLITE_MODERN_CPP_INCLUDE_DIRS "sqlite_modern_cpp.h")
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
 
-# Include directorys for header files
-target_include_directories(ORION PRIVATE include ${SQLITE_MODERN_CPP_INCLUDE_DIRS})
+include(FetchContent)
+FetchContent_Declare(
+        myhtml
+        GIT_REPOSITORY git@github.com:lexborisov/myhtml.git
+)
 
-target_link_libraries(ORION PRIVATE cpprestsdk::cpprest cpprestsdk::cpprestsdk_zlib_internal cpprestsdk::cpprestsdk_boost_internal cpprestsdk::cpprestsdk_openssl_internal cmark::cmark_static unofficial::sqlite3::sqlite3)
+FetchContent_MakeAvailable(myhtml)
+
+# Include directorys for header files
+target_include_directories(ORION PRIVATE include ${SQLITE_MODERN_CPP_INCLUDE_DIRS} ${myhtml_SOURCE_DIR}/include)
+
+target_link_libraries(ORION PRIVATE myhtml cpprestsdk::cpprest cpprestsdk::cpprestsdk_zlib_internal cpprestsdk::cpprestsdk_boost_internal cpprestsdk::cpprestsdk_openssl_internal cmark::cmark_static unofficial::sqlite3::sqlite3)
 
 # Copy the files to the executable directory recursively
 add_custom_command(TARGET ORION POST_BUILD

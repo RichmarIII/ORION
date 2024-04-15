@@ -1,13 +1,14 @@
 #include "tools/RecallKnowledgeFunctionTool.hpp"
+#include "Knowledge.hpp"
 #include "Orion.hpp"
 #include "OrionWebServer.hpp"
-#include "Knowledge.hpp"
 
 #include <filesystem>
 
 using namespace ORION;
 
-std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string
+RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {
@@ -86,15 +87,15 @@ std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
             // Create the database directories if they don't exist
             std::filesystem::create_directories(DATABASE_FILE_PATH.parent_path());
 
-            std::ifstream DatabaseFileSteam{DATABASE_FILE_PATH};
+            std::ifstream DatabaseFileSteam { DATABASE_FILE_PATH };
 
             // Database failed to open
             if (!DatabaseFileSteam.is_open())
             {
-                web::json::value JSearchResults                 = web::json::value::object();
-                JSearchResults[U("instructions_for_assistant")] = web::json::value::string(
-                    U("No knowledge found. Maybe broaden your search (incorporate other knowledge_types). or use other methods to"
-                      "fill users request/statement."));
+                web::json::value JSearchResults = web::json::value::object();
+                JSearchResults[U("instructions_for_assistant")] =
+                    web::json::value::string(U("No knowledge found. Maybe broaden your search (incorporate other knowledge_types). or use other methods to"
+                                               "fill users request/statement."));
 
                 return JSearchResults.serialize();
             }
@@ -122,17 +123,15 @@ std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
             // For each memory fragment, check if the knowledge subject matches
             for (const auto& MemoryFragment : JMemoryFragments)
             {
-                if (const auto SUBJECT_SIMILARITY =
-                        Orion.GetSemanticSimilarity(KNOWLEDGE_SUBJECT, MemoryFragment.at(U("knowledge_subject_and_tags")).as_string());
+                if (const auto SUBJECT_SIMILARITY = Orion.GetSemanticSimilarity(KNOWLEDGE_SUBJECT, MemoryFragment.at(U("knowledge_subject_and_tags")).as_string());
                     SUBJECT_SIMILARITY > 0.3)
                 {
-                    MatchingMemoryFragments.push_back({MemoryFragment, SUBJECT_SIMILARITY});
+                    MatchingMemoryFragments.push_back({ MemoryFragment, SUBJECT_SIMILARITY });
                 }
             }
 
             // Sort the matching memory fragments by most probable first
-            std::sort(MatchingMemoryFragments.begin(), MatchingMemoryFragments.end(),
-                      [](const auto& A, const auto& B) { return A.second > B.second; });
+            std::sort(MatchingMemoryFragments.begin(), MatchingMemoryFragments.end(), [](const auto& A, const auto& B) { return A.second > B.second; });
 
             // If no matching memory fragments were found
             if (MatchingMemoryFragments.empty())
@@ -143,9 +142,9 @@ std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
             // Add the matching memory fragments to the json array
             for (const auto& [MemFragment, CosSimilarity] : MatchingMemoryFragments)
             {
-                web::json::value FragmentResult        = web::json::value::object();
-                FragmentResult[U("cosine_similarity")] = web::json::value::number(CosSimilarity);
-                FragmentResult[U("knowledge")]         = web::json::value::string(MemFragment.serialize());
+                web::json::value FragmentResult                                                 = web::json::value::object();
+                FragmentResult[U("cosine_similarity")]                                          = web::json::value::number(CosSimilarity);
+                FragmentResult[U("knowledge")]                                                  = web::json::value::string(MemFragment.serialize());
                 JMatchingMemoryFragmentResultsArray[JMatchingMemoryFragmentResultsArray.size()] = FragmentResult;
             }
         }
@@ -160,13 +159,13 @@ std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
         }
 
         // Return the knowledge
-        web::json::value JSearchResults             = web::json::value::object();
-        JSearchResults[U("recalled_memories")]      = JMatchingMemoryFragmentResultsArray;
-        JSearchResults[U("instructions_for_orion")] = web::json::value::string(
-            U("Recalled memory. These are the most similar memories, sorted by most relevant first. Use the knowledge to help the user with their "
-              "request/statement. If the knowledge is not"
-              "sufficient, try to gather more information from the user to help them better. Make sure the knowledge is "
-              "interpreted in the correct context."));
+        web::json::value JSearchResults        = web::json::value::object();
+        JSearchResults[U("recalled_memories")] = JMatchingMemoryFragmentResultsArray;
+        JSearchResults[U("instructions_for_orion")] =
+            web::json::value::string(U("Recalled memory. These are the most similar memories, sorted by most relevant first. Use the knowledge to help the user with their "
+                                       "request/statement. If the knowledge is not"
+                                       "sufficient, try to gather more information from the user to help them better. Make sure the knowledge is "
+                                       "interpreted in the correct context."));
 
         // Log the recalled memories
         std::cout << std::endl << std::endl << "Recalled Memories: " << std::endl << JSearchResults.serialize() << std::endl << std::endl;

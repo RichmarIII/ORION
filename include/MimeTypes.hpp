@@ -1,7 +1,7 @@
 #pragma once
 
-#include <string>
 #include <map>
+#include <string>
 
 namespace ORION
 {
@@ -10,18 +10,17 @@ namespace ORION
         /// @brief Get the Mime Type for a given file name
         /// @param FileName File Name
         /// @return Mime Type
-        static std::string GetMimeType(const std::string& FileName)
+        static std::string
+        GetMimeType(const std::string& FileName)
         {
             if (const auto HAS_EXTENSION = FileName.find_last_of('.') != std::string::npos; !HAS_EXTENSION)
             {
                 return OCTET_STREAM;
             }
-            else
-            {
-                const auto EXTENSION = FileName.substr(FileName.find_last_of('.') + 1);
-                const auto MIME_TYPE = MIME_TYPES_MAP.find(EXTENSION);
-                return MIME_TYPE != MIME_TYPES_MAP.end() ? MIME_TYPE->second : OCTET_STREAM;
-            }
+
+            const auto EXTENSION = FileName.substr(FileName.find_last_of('.') + 1);
+            const auto MIME_TYPE = MIME_TYPES_MAP.find(EXTENSION);
+            return MIME_TYPE != MIME_TYPES_MAP.end() ? MIME_TYPE->second : OCTET_STREAM;
         }
 
     protected:

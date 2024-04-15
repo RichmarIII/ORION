@@ -24,8 +24,14 @@
 
 using namespace ORION;
 
-Orion::Orion(const std::string& ID, std::vector<std::unique_ptr<IOrionTool>>&& Tools, const EOrionIntelligence INTELLIGENCE, const EOrionVoice VOICE,
-             const char* pName, const char* pInstructions, const char* pDescription)
+Orion::
+Orion(const std::string&                         ID,
+      std::vector<std::unique_ptr<IOrionTool>>&& Tools,
+      const EOrionIntelligence                   INTELLIGENCE,
+      const EOrionVoice                          VOICE,
+      const char*                                pName,
+      const char*                                pInstructions,
+      const char*                                pDescription)
     : m_Name(pName),
       m_Instructions(pInstructions),
       m_Description(pDescription),
@@ -42,10 +48,13 @@ Orion::Orion(const std::string& ID, std::vector<std::unique_ptr<IOrionTool>>&& T
     }
 }
 
-bool Orion::Initialize(OrionWebServer& WebServer, const web::http::http_request& Request)
+bool
+Orion::Initialize(OrionWebServer& WebServer, const web::http::http_request& Request)
 {
     m_pOrionWebServer     = &WebServer;
     m_pOrionClientContext = &Request;
+
+    LoadAPIKeys();
 
     CreateClient();
     CreateAssistant();
@@ -54,7 +63,8 @@ bool Orion::Initialize(OrionWebServer& WebServer, const web::http::http_request&
     return true;
 }
 
-std::string Orion::GetUserID() const
+std::string
+Orion::GetUserID() const
 {
     if (!m_pOrionWebServer)
     {
@@ -64,7 +74,8 @@ std::string Orion::GetUserID() const
     return m_pOrionWebServer->GetUserID(m_CurrentAssistantID);
 }
 
-double Orion::GetSemanticSimilarity(const std::string& Content, const std::string& Query) const
+double
+Orion::GetSemanticSimilarity(const std::string& Content, const std::string& Query) const
 {
     // Create a new http_request to create an embedding for the content
     web::http::http_request VectorSearchRequest(web::http::methods::POST);
@@ -116,7 +127,107 @@ double Orion::GetSemanticSimilarity(const std::string& Content, const std::strin
     return DotProduct / (std::sqrt(NormContent) * std::sqrt(NormQuery));
 }
 
-pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::json::array& Files)
+void
+Orion::LoadAPIKeys()
+{
+    // Load the OpenAI API key from the environment or a file
+    {
+        if (auto pKey = std::getenv("OPENAI_API_KEY"); pKey)
+        {
+            m_OpenAIAPIKey = pKey;
+        }
+        else
+        {
+            // Load the OpenAI API key from a file
+            std::ifstream APIKey { ".openai_api_key.txt" };
+            m_OpenAIAPIKey = std::string { std::istreambuf_iterator<char>(APIKey), std::istreambuf_iterator<char>() };
+        }
+        if (m_OpenAIAPIKey.empty())
+        {
+            std::cerr << "OpenAI API key not found" << std::endl;
+            return;
+        }
+    }
+
+    // Load the OpenWeather API key from the environment or a file
+    {
+        if (auto pKey = std::getenv("OPENWEATHER_API_KEY"); pKey)
+        {
+            m_OpenWeatherAPIKey = pKey;
+        }
+        else
+        {
+            // Load the OpenWeather API key from a file
+            std::ifstream APIKey { ".openweather_api_key.txt" };
+            m_OpenWeatherAPIKey = std::string { std::istreambuf_iterator<char>(APIKey), std::istreambuf_iterator<char>() };
+        }
+        if (m_OpenWeatherAPIKey.empty())
+        {
+            std::cerr << "OpenWeather API key not found" << std::endl;
+            return;
+        }
+    }
+
+    // Load the Home Assistant API key from the environment or a file
+    {
+        if (auto pKey = std::getenv("HASS_API_KEY"); pKey)
+        {
+            m_HASSAPIKey = pKey;
+        }
+        else
+        {
+            // Load the Home Assistant API key from a file
+            std::ifstream APIKey { ".hass_api_key.txt" };
+            m_HASSAPIKey = std::string { std::istreambuf_iterator<char>(APIKey), std::istreambuf_iterator<char>() };
+        }
+        if (m_HASSAPIKey.empty())
+        {
+            std::cerr << "Home Assistant API key not found" << std::endl;
+            return;
+        }
+    }
+
+    // Load the Google API key from the environment or a file
+    {
+        if (auto pKey = std::getenv("GOOGLE_API_KEY"); pKey)
+        {
+            m_GoogleAPIKey = pKey;
+        }
+        else
+        {
+            // Load the Google API key from a file
+            std::ifstream APIKey { ".google_api_key.txt" };
+            m_GoogleAPIKey = std::string { std::istreambuf_iterator<char>(APIKey), std::istreambuf_iterator<char>() };
+        }
+        if (m_GoogleAPIKey.empty())
+        {
+            std::cerr << "Google API key not found" << std::endl;
+            return;
+        }
+    }
+
+    // Load the Google Custom Search Engine ID from the environment or a file
+    {
+        if (auto pID = std::getenv("GOOGLE_CSE_ID"); pID)
+        {
+            m_GoogleCSEID = pID;
+        }
+        else
+        {
+            // Load the Google Custom Search Engine ID from a file
+            std::ifstream ID { ".google_cse_id.txt" };
+            m_GoogleCSEID = std::string { std::istreambuf_iterator<char>(ID), std::istreambuf_iterator<char>() };
+        }
+        if (m_GoogleCSEID.empty())
+        {
+            std::cerr << "Google Custom Search Engine ID not found" << std::endl;
+            return;
+        }
+    }
+}
+
+pplx::task<void>
+Orion::SendMessageAsync(const std::string& Message, const web::json::array& Files)
 {
     // Upload the files
     auto JFiles = web::json::value::array();
@@ -137,8 +248,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
         auto AppendText = [&](const std::string& Text) { MultiPartFormData.insert(MultiPartFormData.end(), Text.begin(), Text.end()); };
 
         // Helper function to append binary data to the vector
-        auto AppendBinary = [&](const std::vector<unsigned char>& Data)
-        { MultiPartFormData.insert(MultiPartFormData.end(), Data.begin(), Data.end()); };
+        auto AppendBinary = [&](const std::vector<unsigned char>& Data) { MultiPartFormData.insert(MultiPartFormData.end(), Data.begin(), Data.end()); };
 
         // Create the multipart/form-data body
 
@@ -189,7 +299,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
 
     // Create a message in the openai thread
     web::http::http_request CreateMessageRequest(web::http::methods::POST);
-    CreateMessageRequest.set_request_uri(U("threads/" + m_CurrentThreadID + "/messages"));
+    CreateMessageRequest.set_request_uri("threads/" + m_CurrentThreadID + "/messages");
     CreateMessageRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
     CreateMessageRequest.headers().add("OpenAI-Beta", "assistants=v1");
     CreateMessageRequest.headers().add("Content-Type", "application/json");
@@ -222,8 +332,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                 CreateRunBody["assistant_id"] = web::json::value::string(m_CurrentAssistantID);
 
                 // Set the model to the current model
-                CreateRunBody["model"] =
-                    web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
+                CreateRunBody["model"]  = web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
                 CreateRunBody["stream"] = web::json::value::boolean(true);
                 CreateRunRequest.set_body(CreateRunBody);
 
@@ -247,8 +356,8 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                             while (true)
                             {
                                 concurrency::streams::container_buffer<std::string> LineBuff {};
-                                const auto NUM_CHARS_READ = EventStream.read_line(LineBuff).get();
-                                Line                    = LineBuff.collection();
+                                const auto                                          NUM_CHARS_READ = EventStream.read_line(LineBuff).get();
+                                Line                                                               = LineBuff.collection();
 
                                 if (NUM_CHARS_READ <= 0)
                                 {
@@ -268,8 +377,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                                     {
                                         // Format an SSE event for the SSEOrionEventNames::MESSAGE_COMPLETED event.
                                         // No data is needed for this event.
-                                        m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_COMPLETED,
-                                                                           web::json::value::object());
+                                        m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_COMPLETED, web::json::value::object());
                                     }
                                     else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_MESSAGE_DELTA)
                                     {
@@ -292,13 +400,11 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                                             // Check if the content item is a text item
                                             if (JContentItem.has_field(U("text")))
                                             {
-                                                auto JTextContent = JContentItem.at(U("text"));
-                                                auto TextContentString =
-                                                    JTextContent.has_field(U("value")) ? JTextContent.at(U("value")).as_string() : "";
+                                                auto JTextContent      = JContentItem.at(U("text"));
+                                                auto TextContentString = JTextContent.has_field(U("value")) ? JTextContent.at(U("value")).as_string() : "";
 
-                                                auto JAnnotations = JTextContent.has_field(U("annotations"))
-                                                                        ? JTextContent.at(U("annotations")).as_array()
-                                                                        : web::json::value::array().as_array();
+                                                auto JAnnotations =
+                                                    JTextContent.has_field(U("annotations")) ? JTextContent.at(U("annotations")).as_array() : web::json::value::array().as_array();
 
                                                 if (!TextContentString.empty())
                                                 {
@@ -307,8 +413,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                                                     JClientSSEData[U("message")]    = web::json::value::string(TextContentString);
 
                                                     // Send the message to the client
-                                                    m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_DELTA,
-                                                                                       JClientSSEData);
+                                                    m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_DELTA, JClientSSEData);
                                                 }
 
                                                 // Gather the annotations
@@ -339,8 +444,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
 
                                                             // Send the message to the client
 
-                                                            m_pOrionWebServer->SendServerEvent(
-                                                                OrionWebServer::SSEOrionEventNames::MESSAGE_ANNOTATION_CREATED, JClientSSEData);
+                                                            m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_ANNOTATION_CREATED, JClientSSEData);
                                                         }
                                                     }
                                                 }
@@ -385,10 +489,10 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                                                     // Get the tool call
                                                     auto       JFunctionToolCall = JToolCall.at("function");
                                                     const auto TOOL_NAME         = JFunctionToolCall.at("name").as_string();
-                                                    const auto TOOL_ARGS = web::json::value::parse(JFunctionToolCall.at("arguments").as_string());
+                                                    const auto TOOL_ARGS         = web::json::value::parse(JFunctionToolCall.at("arguments").as_string());
 
-                                                    auto ToolIt = std::find_if(m_Tools.begin(), m_Tools.end(), [TOOL_NAME](const auto& Tool)
-                                                                               { return Tool->GetName() == TOOL_NAME; });
+                                                    auto ToolIt =
+                                                        std::find_if(m_Tools.begin(), m_Tools.end(), [TOOL_NAME](const auto& Tool) { return Tool->GetName() == TOOL_NAME; });
 
                                                     if (ToolIt != m_Tools.end())
                                                     {
@@ -411,7 +515,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                                                         // Default to an empty output
                                                         auto JOutput            = web::json::value::object();
                                                         JOutput["tool_call_id"] = JToolCall.at("id");
-                                                        JOutput["output"] = web::json::value::string("Tool doesn't exist.  Stop hallucinating.");
+                                                        JOutput["output"]       = web::json::value::string("Tool doesn't exist.  Stop hallucinating.");
 
                                                         // Add the tool call outputs to the responses
                                                         ToolCallOutputs[ToolCallOutputs.size()] = JOutput;
@@ -484,7 +588,8 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
             });
 }
 
-void Orion::CreateAssistant()
+void
+Orion::CreateAssistant()
 {
     // Check if an assistant already exists on the server
     web::http::http_request ListAssistantsRequest(web::http::methods::GET);
@@ -525,8 +630,7 @@ void Orion::CreateAssistant()
         web::json::value UpdateAssistantRequestBody = web::json::value::object();
         UpdateAssistantRequestBody["instructions"]  = web::json::value::string(m_Instructions);
         UpdateAssistantRequestBody["description"]   = web::json::value::string(m_Description);
-        UpdateAssistantRequestBody["model"] =
-            web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
+        UpdateAssistantRequestBody["model"]         = web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
 
         if (!m_Tools.empty())
         {
@@ -563,8 +667,7 @@ void Orion::CreateAssistant()
         CreateAssistantRequestBody["name"]          = web::json::value::string(m_Name);
         CreateAssistantRequestBody["instructions"]  = web::json::value::string(m_Instructions);
         CreateAssistantRequestBody["description"]   = web::json::value::string(m_Description);
-        CreateAssistantRequestBody["model"] =
-            web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
+        CreateAssistantRequestBody["model"]         = web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
 
         if (!m_Tools.empty())
         {
@@ -595,7 +698,8 @@ void Orion::CreateAssistant()
     }
 }
 
-void Orion::CreateThread()
+void
+Orion::CreateThread()
 {
     // Create a new thread
     web::http::http_request CreateThreadRequest(web::http::methods::POST);
@@ -617,87 +721,34 @@ void Orion::CreateThread()
     }
 }
 
-void Orion::CreateClient()
+void
+Orion::CreateClient()
 {
     // Create a client to communicate with the OpenAI API
     m_OpenAIClient = std::make_unique<web::http::client::http_client>(U("https://api.openai.com/v1/"));
-
-    // Load the OpenAI API key from the environment or a file
-    {
-        if (auto pKey = std::getenv("OPENAI_API_KEY"); pKey)
-        {
-            m_OpenAIAPIKey = pKey;
-        }
-        else
-        {
-            // Load the OpenAI API key from a file
-            std::ifstream APIKey {".openai_api_key.txt"};
-            m_OpenAIAPIKey = std::string {std::istreambuf_iterator<char>(APIKey), std::istreambuf_iterator<char>()};
-        }
-        if (m_OpenAIAPIKey.empty())
-        {
-            std::cerr << "OpenAI API key not found" << std::endl;
-            return;
-        }
-    }
-
-    // Load the OpenWeather API key from the environment or a file
-    {
-        if (auto pKey = std::getenv("OPENWEATHER_API_KEY"); pKey)
-        {
-            m_OpenWeatherAPIKey = pKey;
-        }
-        else
-        {
-            // Load the OpenWeather API key from a file
-            std::ifstream APIKey {".openweather_api_key.txt"};
-            m_OpenWeatherAPIKey = std::string {std::istreambuf_iterator<char>(APIKey), std::istreambuf_iterator<char>()};
-        }
-        if (m_OpenWeatherAPIKey.empty())
-        {
-            std::cerr << "OpenWeather API key not found" << std::endl;
-            return;
-        }
-    }
-
-    // Load the Home Assistant API key from the environment or a file
-    {
-        if (auto pKey = std::getenv("HASS_API_KEY"); pKey)
-        {
-            m_HASSAPIKey = pKey;
-        }
-        else
-        {
-            // Load the Home Assistant API key from a file
-            std::ifstream APIKey {".hass_api_key.txt"};
-            m_HASSAPIKey = std::string {std::istreambuf_iterator<char>(APIKey), std::istreambuf_iterator<char>()};
-        }
-        if (m_HASSAPIKey.empty())
-        {
-            std::cerr << "Home Assistant API key not found" << std::endl;
-            return;
-        }
-    }
 }
 
-void Orion::SetNewVoice(const EOrionVoice VOICE)
+void
+Orion::SetNewVoice(const EOrionVoice VOICE)
 {
     m_CurrentVoice = VOICE;
 }
 
-void Orion::SetNewIntelligence(const EOrionIntelligence INTELLIGENCE)
+void
+Orion::SetNewIntelligence(const EOrionIntelligence INTELLIGENCE)
 {
     m_CurrentIntelligence = INTELLIGENCE;
 }
 
-pplx::task<void> Orion::SpeakAsync(const std::string& Message, const ETTSAudioFormat AUDIO_FORMAT) const
+pplx::task<void>
+Orion::SpeakAsync(const std::string& Message, const ETTSAudioFormat AUDIO_FORMAT) const
 {
     // Split the message into multiple messages if it's too long
     return SplitMessageAsync(Message).then(
         [this, AUDIO_FORMAT](const pplx::task<std::vector<std::string>>& SplitMessageTask)
         {
-            const auto        SPLIT_MESSAGES {SplitMessageTask.get()};
-            const std::string AUDIO_DIR {OrionWebServer::AssetDirectories::ResolveOrionAudioDir(m_CurrentAssistantID)};
+            const auto        SPLIT_MESSAGES { SplitMessageTask.get() };
+            const std::string AUDIO_DIR { OrionWebServer::AssetDirectories::ResolveOrionAudioDir(m_CurrentAssistantID) };
 
             // Each orion instance has it's own folder for audio files to avoid conflicts. Append the assistant id to the audio folder.
             // Create the audio directory if it doesn't exist
@@ -736,12 +787,15 @@ pplx::task<void> Orion::SpeakAsync(const std::string& Message, const ETTSAudioFo
             // Only wait for the first task to complete.  By the time the first task is done, the rest of the tasks should be done as well or
             // enough generated audio should be available to play without buffering.
             if (Tasks.begin()->wait() != pplx::task_status::completed)
+            {
                 std::cout << __FUNCTION__ << ":" << __LINE__ << ":"
                           << "Task not completed!";
+            }
         });
 }
 
-web::json::value Orion::ListSmartDevices(const std::string& Domain) const
+web::json::value
+Orion::ListSmartDevices(const std::string& Domain) const
 {
     try
     {
@@ -799,7 +853,8 @@ web::json::value Orion::ListSmartDevices(const std::string& Domain) const
     }
 }
 
-web::json::value Orion::ExecSmartDeviceService(const web::json::value& Devices, const std::string& Service) const
+web::json::value
+Orion::ExecSmartDeviceService(const web::json::value& Devices, const std::string& Service) const
 {
     try
     {
@@ -847,7 +902,8 @@ web::json::value Orion::ExecSmartDeviceService(const web::json::value& Devices, 
     }
 }
 
-pplx::task<web::json::value> Orion::GetChatHistoryAsync() const
+pplx::task<web::json::value>
+Orion::GetChatHistoryAsync() const
 {
     // Create a new http_request to get the chat history
     web::http::http_request ListMessagesRequest(web::http::methods::GET);
@@ -923,7 +979,8 @@ pplx::task<web::json::value> Orion::GetChatHistoryAsync() const
             });
 }
 
-pplx::task<void> Orion::SpeakSingleAsync(const std::string& Message, const uint8_t INDEX, const ETTSAudioFormat AUDIO_FORMAT) const
+pplx::task<void>
+Orion::SpeakSingleAsync(const std::string& Message, const uint8_t INDEX, const ETTSAudioFormat AUDIO_FORMAT) const
 {
     // Create a new http_request to get the speech
     web::http::http_request TextToSpeechRequest(web::http::methods::POST);
@@ -1017,7 +1074,9 @@ pplx::task<void> Orion::SpeakSingleAsync(const std::string& Message, const uint8
                         {
                             // Stream the response to the file
                             if (TextToSpeechResponse.body().read_to_end(AudioFileStream.streambuf()).wait() != pplx::task_status::completed)
+                            {
                                 std::cout << __FUNCTION__ << ":" << __LINE__ << ": Task was not completed!";
+                            }
 
                             return pplx::task_from_result();
                         });
@@ -1032,7 +1091,8 @@ pplx::task<void> Orion::SpeakSingleAsync(const std::string& Message, const uint8
             });
 }
 
-pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string& Message)
+pplx::task<std::vector<std::string>>
+Orion::SplitMessageAsync(const std::string& Message)
 {
     // Split the message into multiple messages if it's too long. But only on periods or newlines.
     // This is to avoid splitting words in half. A message can be longer than x amount of characters if it contains no periods or newlines.
@@ -1068,14 +1128,12 @@ pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string&
                     ++Index;
 
                     // Check conditions for splitting
-                    if ((Index - MessageStart >= MAX_LENGTH_SOFT_LIMIT &&
-                         (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DISTANCE_THRESHOLD)) ||
+                    if ((Index - MessageStart >= MAX_LENGTH_SOFT_LIMIT && (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DISTANCE_THRESHOLD)) ||
                         Index - MessageStart >= MAX_LENGTH_HARD_LIMIT)
                     {
                         DidReachHardLimit = true; // Force split if hard limit reached
                         // Adjust SplitIndex to last known good split if within threshold, otherwise split at current index
-                        const size_t SPLIT_INDEX =
-                            (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DISTANCE_THRESHOLD) ? LastSplitIndex : Index - 1;
+                        const size_t SPLIT_INDEX = (LastSplitIndex != std::string::npos && Index - LastSplitIndex <= DISTANCE_THRESHOLD) ? LastSplitIndex : Index - 1;
                         Messages.push_back(Message.substr(MessageStart, SPLIT_INDEX - MessageStart + 1));
                         MessageStart   = SPLIT_INDEX + 1;
                         Index          = MessageStart;

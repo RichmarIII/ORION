@@ -11,12 +11,14 @@ namespace ORION
 
         static struct GUID Generate();
 
-        explicit operator std::string() const
+        explicit inline
+        operator std::string() const
         {
             return GUIDString;
         }
 
-        explicit inline operator bool() const
+        explicit inline
+        operator bool() const
         {
             return !GUIDString.empty();
         }

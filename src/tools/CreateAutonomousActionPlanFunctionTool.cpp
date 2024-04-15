@@ -3,7 +3,8 @@
 
 using namespace ORION;
 
-std::string CreateAutonomousActionPlanFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string
+CreateAutonomousActionPlanFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {

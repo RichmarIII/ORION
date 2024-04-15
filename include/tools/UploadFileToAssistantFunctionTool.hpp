@@ -28,7 +28,9 @@ namespace ORION
             })";
         };
 
-        inline UploadFileToAssistantFunctionTool() : FunctionTool(Statics::UPLOAD_FILE_TO_ASSISTANT)
+        inline
+        UploadFileToAssistantFunctionTool()
+            : FunctionTool(Statics::UPLOAD_FILE_TO_ASSISTANT)
         {
         }
 

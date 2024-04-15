@@ -142,10 +142,13 @@ namespace ORION
         /// @param  pName The name of the Orion instance
         /// @param  pInstructions The instructions for the Orion instance
         /// @param  pDescription The description of the Orion instance
-        explicit Orion(const std::string& ID = "", std::vector<std::unique_ptr<IOrionTool>>&& Tools = {},
-                       const EOrionIntelligence INTELLIGENCE = Defaults::INTELLIGENCE, const EOrionVoice VOICE = Defaults::VOICE,
-                       const char* pName = Defaults::NAME, const char* pInstructions = Defaults::INSTRUCTIONS,
-                       const char* pDescription = Defaults::DESCRIPTION);
+        explicit Orion(const std::string&                         ID            = "",
+                       std::vector<std::unique_ptr<IOrionTool>>&& Tools         = {},
+                       const EOrionIntelligence                   INTELLIGENCE  = Defaults::INTELLIGENCE,
+                       const EOrionVoice                          VOICE         = Defaults::VOICE,
+                       const char*                                pName         = Defaults::NAME,
+                       const char*                                pInstructions = Defaults::INSTRUCTIONS,
+                       const char*                                pDescription  = Defaults::DESCRIPTION);
 
         /**
          * Initialize the Orion instance.
@@ -190,30 +193,52 @@ namespace ORION
 
         /// @brief  Get the current assistant ID
         /// @return The current assistant ID
-        inline std::string GetCurrentAssistantID() const
+        inline std::string
+        GetCurrentAssistantID() const
         {
             return m_CurrentAssistantID;
         }
 
         /// @brief  Get the current thread ID
         /// @return The current thread ID
-        inline std::string GetCurrentThreadID() const
+        inline std::string
+        GetCurrentThreadID() const
         {
             return m_CurrentThreadID;
         }
 
         /// @brief  Get the OpenAI API Key
         /// @return The OpenAI API Key
-        inline std::string GetOpenAIAPIKey() const
+        inline std::string
+        GetOpenAIAPIKey() const
         {
             return m_OpenAIAPIKey;
         }
 
         /// @brief  Get the OpenWeather API Key
         /// @return The OpenWeather API Key
-        inline std::string GetOpenWeatherAPIKey() const
+        inline std::string
+        GetOpenWeatherAPIKey() const
         {
             return m_OpenWeatherAPIKey;
+        }
+
+        inline std::string
+        GetHomeAssistantAPIKey() const
+        {
+            return m_HASSAPIKey;
+        }
+
+        inline std::string
+        GetGoogleAPIKey() const
+        {
+            return m_GoogleAPIKey;
+        }
+
+        inline std::string
+        GetGoogleCustomSearchEngineID() const
+        {
+            return m_GoogleCSEID;
         }
 
         /// @brief  Get the chat history asynchronously
@@ -224,7 +249,8 @@ namespace ORION
          *
          * @return The web server that this instance is associated with
          */
-        inline class OrionWebServer& GetWebServer() const
+        inline class OrionWebServer&
+        GetWebServer() const
         {
             return *m_pOrionWebServer;
         }
@@ -248,6 +274,12 @@ namespace ORION
          */
         double GetSemanticSimilarity(const std::string& Content, const std::string& Query) const;
 
+        /**
+         * @brief Loads the API keys from the environment variables or configuration files into the appropriate variables
+         *
+         */
+        void LoadAPIKeys();
+
     protected:
         /// @brief  Create a client to communicate with the OpenAI API
         void CreateClient();
@@ -264,8 +296,7 @@ namespace ORION
         /// @param  INDEX The index of the message
         /// @param  AUDIO_FORMAT The audio format to use
         /// @return Nothing. The audio file will be saved to the disk with the format "audio/{assistant_id}/speech_{index}.{ext}"
-        pplx::task<void> SpeakSingleAsync(const std::string& Message, const uint8_t INDEX,
-                                          const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default) const;
+        pplx::task<void> SpeakSingleAsync(const std::string& Message, const uint8_t INDEX, const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default) const;
 
         /// @brief  Split the message into multiple parts if it is too long asynchronously. This is a helper function that is called by the SpeakAsync
         /// function.
@@ -280,6 +311,8 @@ namespace ORION
         std::vector<std::unique_ptr<IOrionTool>> m_Tools;
         std::string                              m_OpenAIAPIKey;
         std::string                              m_OpenWeatherAPIKey;
+        std::string                              m_GoogleAPIKey;
+        std::string                              m_GoogleCSEID;
         std::string                              m_HASSAPIKey;
         std::string                              m_CurrentAssistantID;
         std::string                              m_CurrentThreadID;

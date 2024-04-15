@@ -7,4 +7,4 @@ namespace ORION
     struct MiscConstants final
     {
     };
-}
+} // namespace ORION

@@ -1,14 +1,15 @@
 #include "tools/RememberKnowledgeFunctionTool.hpp"
+#include "GUID.hpp"
+#include "Knowledge.hpp"
 #include "Orion.hpp"
 #include "OrionWebServer.hpp"
-#include "Knowledge.hpp"
-#include "GUID.hpp"
 
 #include <filesystem>
 
 using namespace ORION;
 
-std::string RememberKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string
+RememberKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {
@@ -101,18 +102,16 @@ std::string RememberKnowledgeFunctionTool::Execute(Orion& Orion, const web::json
                     const auto JKnowledgeFragment = web::json::value::parse(Line);
 
                     // Check if the knowledge subject matches
-                    const auto SIMILARITY =
-                        Orion.GetSemanticSimilarity(KNOWLEDGE_SUBJECT, JKnowledgeFragment.at(U("knowledge_subject_and_tags")).as_string());
+                    const auto SIMILARITY = Orion.GetSemanticSimilarity(KNOWLEDGE_SUBJECT, JKnowledgeFragment.at(U("knowledge_subject_and_tags")).as_string());
                     if (SIMILARITY >= 0.8)
                     {
-                        MatchingKnowledgeFragments.push_back({JKnowledgeFragment, SIMILARITY});
+                        MatchingKnowledgeFragments.push_back({ JKnowledgeFragment, SIMILARITY });
                     }
                 }
             }
 
             // Sort the matching knowledge fragments by similarity (highest to lowest)
-            std::sort(MatchingKnowledgeFragments.begin(), MatchingKnowledgeFragments.end(),
-                      [](const auto& A, const auto& B) { return A.second > B.second; });
+            std::sort(MatchingKnowledgeFragments.begin(), MatchingKnowledgeFragments.end(), [](const auto& A, const auto& B) { return A.second > B.second; });
 
             if (!MatchingKnowledgeFragments.empty())
             {
@@ -125,11 +124,11 @@ std::string RememberKnowledgeFunctionTool::Execute(Orion& Orion, const web::json
                     MatchingKnowledgeFragmentIds[MatchingKnowledgeFragmentIds.size()] = JKnowledgeFragment.at(U("knowledge_id"));
                 }
                 JResult[U("matching_knowledge_fragment_ids")] = MatchingKnowledgeFragmentIds;
-                JResult[U("instructions_for_orion")]          = web::json::value::string(
-                    U("Similar knowledge already exists. You MUST remove the existing knowledge and incorporate it into a new, larger, more cohesive "
-                                        "knowledge fragment taking into account the updated information and existing information. This MUST be done by calling the "
-                                        "update_knowledge function. matching_knowledge_fragment_ids contains the ids of the matching knowledge fragments that must be "
-                                        "removed. pay special attention to the parameters of the update_knowledge function."));
+                JResult[U("instructions_for_orion")] =
+                    web::json::value::string(U("Similar knowledge already exists. You MUST remove the existing knowledge and incorporate it into a new, larger, more cohesive "
+                                               "knowledge fragment taking into account the updated information and existing information. This MUST be done by calling the "
+                                               "update_knowledge function. matching_knowledge_fragment_ids contains the ids of the matching knowledge fragments that must be "
+                                               "removed. pay special attention to the parameters of the update_knowledge function."));
                 JResult[U("next_action")] = web::json::value::string(U("update_knowledge"));
 
                 return JResult.serialize();

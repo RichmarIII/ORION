@@ -32,7 +32,9 @@ namespace ORION
             })";
         };
 
-        inline ExecSmartDeviceServiceFunctionTool() : FunctionTool(Statics::EXEC_SMART_DEVICE_SERVICE)
+        inline
+        ExecSmartDeviceServiceFunctionTool()
+            : FunctionTool(Statics::EXEC_SMART_DEVICE_SERVICE)
         {
         }
 

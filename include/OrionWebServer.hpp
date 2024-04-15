@@ -5,10 +5,10 @@
 #include <cpprest/http_listener.h>
 #include <cpprest/producerconsumerstream.h>
 #include <memory>
-#include <regex>
-#include <vector>
-#include <thread>
 #include <optional>
+#include <regex>
+#include <thread>
+#include <vector>
 
 namespace ORION
 {
@@ -86,7 +86,8 @@ namespace ORION
             static constexpr auto USER_KNOWLEDGE_DIR_TEMPLATE = ASSETS_DIR "/" DATABASE_DIR "/" USER_ID_PLACEHOLDER "/knowledge";
 
             template <typename... Args>
-            static std::string ResolveTemplate(const std::string& TemplateString, Args&&... Values)
+            static std::string
+            ResolveTemplate(const std::string& TemplateString, Args&&... Values)
             {
                 std::regex        RegexPattern("\\{.*?\\}");
                 std::stringstream ResultStream;
@@ -96,8 +97,7 @@ namespace ORION
                 std::istringstream ArgumentsIn(ArgumentsStream.str());
 
                 size_t Start = 0;
-                for (auto Iter = std::sregex_iterator(TemplateString.begin(), TemplateString.end(), RegexPattern); Iter != std::sregex_iterator();
-                     ++Iter)
+                for (auto Iter = std::sregex_iterator(TemplateString.begin(), TemplateString.end(), RegexPattern); Iter != std::sregex_iterator(); ++Iter)
                 {
                     std::smatch Match = *Iter;
                     if (std::getline(ArgumentsIn, Argument, ' '))
@@ -111,17 +111,20 @@ namespace ORION
                 return ResultStream.str();
             }
 
-            static inline std::string ResolveOrionAudioDir(const std::string& OrionId)
+            static inline std::string
+            ResolveOrionAudioDir(const std::string& OrionId)
             {
                 return ResolveTemplate(ORION_AUDIO_DIR_TEMPLATE, STATIC_AUDIO_DIR, OrionId);
             }
 
-            static inline std::string ResolveUserKnowledgeDir(const std::string& UserId)
+            static inline std::string
+            ResolveUserKnowledgeDir(const std::string& UserId)
             {
                 return ResolveTemplate(USER_KNOWLEDGE_DIR_TEMPLATE, UserId);
             }
 
-            static inline std::string ResolveOpenAIKeyFile()
+            static inline std::string
+            ResolveOpenAIKeyFile()
             {
                 return OPENAI_API_KEY_FILE;
             }
@@ -200,11 +203,11 @@ namespace ORION
          * @param OrionInstanceID The ID of the Orion instance.
          * @return The User ID associated with the Orion instance.
          */
-        inline std::string GetUserID(const std::string& OrionInstanceID) const
+        inline std::string
+        GetUserID(const std::string& OrionInstanceID) const
         {
             // Find the user with the given Orion instance ID
-            auto UserIt =
-                std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [&](const User& UserArg) { return UserArg.OrionID == OrionInstanceID; });
+            auto UserIt = std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [&](const User& UserArg) { return UserArg.OrionID == OrionInstanceID; });
 
             return UserIt != m_LoggedInUsers.end() ? UserIt->UserID : "";
         }

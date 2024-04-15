@@ -6,7 +6,8 @@
 
 using namespace ORION;
 
-GUID GUID::Generate()
+GUID
+GUID::Generate()
 {
     // Get the current time as a timestamp
     const auto TIME_NOW          = std::chrono::system_clock::now().time_since_epoch();
@@ -28,5 +29,5 @@ GUID GUID::Generate()
     GUIDStringStream << "-" << std::setw(4) << (DISTRIBUTION(RandomGenerator) | 0x8000); // The 8 in "8xxx" indicates the variant
     GUIDStringStream << "-" << std::setw(12) << TIME_NANO_SECONDS;
 
-    return {GUIDStringStream.str()};
+    return { GUIDStringStream.str() };
 }

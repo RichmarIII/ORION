@@ -34,7 +34,9 @@ namespace ORION
             })";
         };
 
-        inline ChangeIntelligenceFunctionTool() : FunctionTool(Statics::CHANGE_INTELLIGENCE)
+        inline
+        ChangeIntelligenceFunctionTool()
+            : FunctionTool(Statics::CHANGE_INTELLIGENCE)
         {
         }
 

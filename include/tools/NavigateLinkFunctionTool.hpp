@@ -32,7 +32,9 @@ namespace ORION
             })";
         };
 
-        inline NavigateLinkFunctionTool() : FunctionTool(Statics::NAVIGATE_LINK)
+        inline
+        NavigateLinkFunctionTool()
+            : FunctionTool(Statics::NAVIGATE_LINK)
         {
         }
 

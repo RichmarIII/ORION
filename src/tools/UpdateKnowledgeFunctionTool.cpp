@@ -1,14 +1,15 @@
 #include "tools/UpdateKnowledgeFunctionTool.hpp"
+#include "GUID.hpp"
+#include "Knowledge.hpp"
 #include "Orion.hpp"
 #include "OrionWebServer.hpp"
-#include "Knowledge.hpp"
-#include "GUID.hpp"
 
 #include <filesystem>
 
 using namespace ORION;
 
-std::string UpdateKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string
+UpdateKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {
@@ -108,8 +109,7 @@ std::string UpdateKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::
                 const auto JKnowledgeFragment = web::json::value::parse(Line);
 
                 // Check if the knowledge fragment is being updated
-                if (std::find(EXISTING_KNOWLEDGE_IDS.begin(), EXISTING_KNOWLEDGE_IDS.end(), JKnowledgeFragment.at(U("knowledge_id"))) ==
-                    EXISTING_KNOWLEDGE_IDS.end())
+                if (std::find(EXISTING_KNOWLEDGE_IDS.begin(), EXISTING_KNOWLEDGE_IDS.end(), JKnowledgeFragment.at(U("knowledge_id"))) == EXISTING_KNOWLEDGE_IDS.end())
                 {
                     // Add the knowledge fragment to the vector
                     KnowledgeFragmentsAfterRemoval.push_back(JKnowledgeFragment);

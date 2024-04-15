@@ -19,7 +19,9 @@ namespace ORION
             })";
         };
 
-        inline TakeScreenshotFunctionTool() : FunctionTool(Statics::TAKE_SCREENSHOT)
+        inline
+        TakeScreenshotFunctionTool()
+            : FunctionTool(Statics::TAKE_SCREENSHOT)
         {
         }
 

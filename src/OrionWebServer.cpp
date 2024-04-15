@@ -6,20 +6,20 @@
 #include "tools/ChangeIntelligenceFunctionTool.hpp"
 #include "tools/ChangeVoiceFunctionTool.hpp"
 #include "tools/CodeInterpreterTool.hpp"
+#include "tools/CreateAutonomousActionPlanFunctionTool.hpp"
 #include "tools/DownloadHTTPFileFunctionTool.hpp"
 #include "tools/ExecSmartDeviceServiceFunctionTool.hpp"
 #include "tools/GetWeatherFunctionTool.hpp"
 #include "tools/ListSmartDevicesFunctionTool.hpp"
 #include "tools/NavigateLinkFunctionTool.hpp"
+#include "tools/RecallKnowledgeFunctionTool.hpp"
+#include "tools/RememberKnowledgeFunctionTool.hpp"
 #include "tools/RetrievalTool.hpp"
 #include "tools/SearchFilesystemFunctionTool.hpp"
 #include "tools/TakeScreenshotFunctionTool.hpp"
-#include "tools/WebSearchFunctionTool.hpp"
-#include "tools/CreateAutonomousActionPlanFunctionTool.hpp"
-#include "tools/UploadFileToAssistantFunctionTool.hpp"
-#include "tools/RememberKnowledgeFunctionTool.hpp"
-#include "tools/RecallKnowledgeFunctionTool.hpp"
 #include "tools/UpdateKnowledgeFunctionTool.hpp"
+#include "tools/UploadFileToAssistantFunctionTool.hpp"
+#include "tools/WebSearchFunctionTool.hpp"
 
 #include <cmark.h>
 
@@ -32,7 +32,8 @@
 
 using namespace ORION;
 
-std::string OrionWebServer::AssetDirectories::ResolveBaseAssetDirectory(const std::string& Extension)
+std::string
+OrionWebServer::AssetDirectories::ResolveBaseAssetDirectory(const std::string& Extension)
 {
     // Get the mime type
     const auto MIME_TYPE = MimeTypes::GetMimeType(Extension);
@@ -72,14 +73,15 @@ std::string OrionWebServer::AssetDirectories::ResolveBaseAssetDirectory(const st
     }
 }
 
-void OrionWebServer::Start(const int PORT)
+void
+OrionWebServer::Start(const int PORT)
 {
     web::http::experimental::listener::http_listener_config ListenerConfig;
     ListenerConfig.set_ssl_context_callback(
         [this](boost::asio::ssl::context& Ctx)
         {
-            Ctx.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 |
-                            boost::asio::ssl::context::no_sslv3 | boost::asio::ssl::context::single_dh_use);
+            Ctx.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 | boost::asio::ssl::context::no_sslv3 |
+                            boost::asio::ssl::context::single_dh_use);
             Ctx.set_password_callback([](std::size_t MaxLength, boost::asio::ssl::context::password_purpose Purpose) { return "test"; });
             Ctx.use_certificate_chain_file("cert.pem");
             Ctx.use_private_key_file("key.pem", boost::asio::ssl::context::pem);
@@ -99,7 +101,8 @@ void OrionWebServer::Start(const int PORT)
     m_OrionEventThread = std::thread(std::bind(&OrionWebServer::OrionEventThreadHandler, this));
 }
 
-void OrionWebServer::Stop()
+void
+OrionWebServer::Stop()
 {
     // Close the listener
     m_IsRunning = false;
@@ -108,7 +111,8 @@ void OrionWebServer::Stop()
     m_OrionEventThread.join();
 }
 
-void OrionWebServer::Wait()
+void
+OrionWebServer::Wait()
 {
     // Aquire the lock
     std::unique_lock<std::mutex> Lock(m_Mutex);
@@ -118,10 +122,13 @@ void OrionWebServer::Wait()
 
     // Close the listener
     if (m_Listener.close().wait() != pplx::task_status::completed)
+    {
         std::cout << __FUNCTION__ << ":" << __LINE__ << ": Failed to close http listener!";
+    }
 }
 
-void OrionWebServer::HandleRequest(const web::http::http_request& Request)
+void
+OrionWebServer::HandleRequest(const web::http::http_request& Request)
 {
     // Get the request path
     // ReSharper disable once CppTooWideScopeInitStatement
@@ -178,7 +185,8 @@ void OrionWebServer::HandleRequest(const web::http::http_request& Request)
     }
 }
 
-void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
+void
+OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
 {
     // Check for the X-User-Id header
     if (!Request.headers().has(U("X-User-Id")))
@@ -191,8 +199,7 @@ void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
     const auto USER_ID = Request.headers().find(U("X-User-Id"))->second;
 
     // Find User in the list of logged in users
-    const auto USER_ITER =
-        std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
+    const auto USER_ITER = std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
     if (USER_ITER == m_LoggedInUsers.end())
     {
         Request.reply(web::http::status_codes::Unauthorized, U("User is not logged in."));
@@ -200,7 +207,8 @@ void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
     }
 
     // Find the Orion instance with the given id
-    auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
+    auto OrionIt = std::find_if(m_OrionInstances.begin(),
+                                m_OrionInstances.end(),
                                 [USER_ITER](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == USER_ITER->OrionID; });
 
     // Check if the Orion instance was found
@@ -234,13 +242,14 @@ void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
 }
 
 // ReSharper disable once CppMemberFunctionMayBeStatic
-void OrionWebServer::HandleRootEndpoint(web::http::http_request Request)
+void
+OrionWebServer::HandleRootEndpoint(web::http::http_request Request)
 {
-    constexpr auto INDEX_HTML {U("index.html")};
+    constexpr auto INDEX_HTML { U("index.html") };
     const auto     INDEX_HTML_PATH = std::filesystem::path(AssetDirectories::ResolveBaseAssetDirectory(INDEX_HTML)) / INDEX_HTML;
 
     // Find the index.html file
-    std::ifstream IndexFile {INDEX_HTML_PATH};
+    std::ifstream IndexFile { INDEX_HTML_PATH };
     if (!IndexFile.is_open())
     {
         Request.reply(web::http::status_codes::NotFound, U("The index.html file was not found."));
@@ -248,7 +257,7 @@ void OrionWebServer::HandleRootEndpoint(web::http::http_request Request)
     }
 
     // Read the contents of the index.html file
-    std::string IndexContents {std::istreambuf_iterator<char>(IndexFile), std::istreambuf_iterator<char>()};
+    std::string IndexContents { std::istreambuf_iterator<char>(IndexFile), std::istreambuf_iterator<char>() };
 
     // Send the contents of the index.html file
     const auto MIME_TYPE = MimeTypes::GetMimeType(INDEX_HTML);
@@ -258,16 +267,17 @@ void OrionWebServer::HandleRootEndpoint(web::http::http_request Request)
 }
 
 // ReSharper disable once CppMemberFunctionMayBeStatic
-void OrionWebServer::HandleAssetFileEndpoint(web::http::http_request Request)
+void
+OrionWebServer::HandleAssetFileEndpoint(web::http::http_request Request)
 {
     // Get the file name from the request path and make it relative (remove the leading slash)
-    const auto FILE_NAME {std::filesystem::path(Request.request_uri().path()).relative_path()};
+    const auto FILE_NAME { std::filesystem::path(Request.request_uri().path()).relative_path() };
 
     // Calculate file path based on the file extension
-    const std::string FILE_PATH {AssetDirectories::ResolveBaseAssetDirectory(FILE_NAME) / FILE_NAME};
+    const std::string FILE_PATH { AssetDirectories::ResolveBaseAssetDirectory(FILE_NAME) / FILE_NAME };
 
     // Get mime type from file extension
-    const std::string CONTENT_TYPE {MimeTypes::GetMimeType(FILE_PATH)};
+    const std::string CONTENT_TYPE { MimeTypes::GetMimeType(FILE_PATH) };
 
     // Stream the file to the response
     concurrency::streams::fstream::open_istream(FILE_PATH)
@@ -289,16 +299,16 @@ void OrionWebServer::HandleAssetFileEndpoint(web::http::http_request Request)
                 {
                     std::cout << U("The file ") << FILE_PATH << U(" was not found: ") << std::endl;
 
-                    Request.reply(web::http::status_codes::NotFound,
-                                  U("The file ") + FILE_PATH + U(" was not found: ") + std::string(Exception.what()));
+                    Request.reply(web::http::status_codes::NotFound, U("The file ") + FILE_PATH + U(" was not found: ") + std::string(Exception.what()));
                 }
             });
 }
 
-void OrionWebServer::HandleSpeechAssetFileEndpoint(web::http::http_request Request)
+void
+OrionWebServer::HandleSpeechAssetFileEndpoint(web::http::http_request Request)
 {
     // Get Orion ID from the request header
-    const auto USER_ID {Request.headers().find(U("X-User-Id"))->second};
+    const auto USER_ID { Request.headers().find(U("X-User-Id"))->second };
 
     if (USER_ID.empty())
     {
@@ -307,8 +317,7 @@ void OrionWebServer::HandleSpeechAssetFileEndpoint(web::http::http_request Reque
     }
 
     // Find the Logged in user
-    const auto USER_ITER =
-        std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
+    const auto USER_ITER = std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
 
     const auto ORION_ID = USER_ITER->OrionID;
 
@@ -336,16 +345,16 @@ void OrionWebServer::HandleSpeechAssetFileEndpoint(web::http::http_request Reque
     }
 
     // Get the index from the request path
-    const auto SPEECH_INDEX {Request.request_uri().path().substr(Request.request_uri().path().find_last_of('/') + 1)};
+    const auto SPEECH_INDEX { Request.request_uri().path().substr(Request.request_uri().path().find_last_of('/') + 1) };
 
     // The speech file name
-    const auto SPEECH_FILE_NAME {SPEECH_INDEX + "." + AudioFormat};
+    const auto SPEECH_FILE_NAME { SPEECH_INDEX + "." + AudioFormat };
 
     // Speech file path
     const std::string SPEECH_FILE_PATH = std::filesystem::path(AssetDirectories::ResolveOrionAudioDir(ORION_ID)) / SPEECH_FILE_NAME;
 
     // Get mime type from file extension
-    const auto CONTENT_TYPE {MimeTypes::GetMimeType(SPEECH_FILE_PATH)};
+    const auto CONTENT_TYPE { MimeTypes::GetMimeType(SPEECH_FILE_PATH) };
 
     // Stream the file to the response
     concurrency::streams::fstream::open_istream(SPEECH_FILE_PATH)
@@ -367,13 +376,13 @@ void OrionWebServer::HandleSpeechAssetFileEndpoint(web::http::http_request Reque
                 {
                     std::cout << U("The file ") << SPEECH_FILE_PATH << U(" was not found: ") << std::endl;
 
-                    Request.reply(web::http::status_codes::NotFound,
-                                  U("The file ") + SPEECH_FILE_PATH + U(" was not found: ") + std::string(Exception.what()));
+                    Request.reply(web::http::status_codes::NotFound, U("The file ") + SPEECH_FILE_PATH + U(" was not found: ") + std::string(Exception.what()));
                 }
             });
 }
 
-void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request Request) const
+void
+OrionWebServer::HandleMarkdownEndpoint(web::http::http_request Request) const
 {
     // Get the message from the request body
     Request.extract_json()
@@ -400,7 +409,8 @@ void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request Request) con
             });
 }
 
-void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
+void
+OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
 {
     // Check for the X-User-Id header
     if (!Request.headers().has(U("X-User-Id")))
@@ -416,8 +426,7 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
     const auto USER_ID = Request.headers().find(U("X-User-Id"))->second;
 
     // Find User in the list of logged in users
-    const auto USER_ITER =
-        std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
+    const auto USER_ITER = std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
     if (USER_ITER == m_LoggedInUsers.end())
     {
         web::json::value Response = web::json::value::object();
@@ -429,7 +438,8 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
     }
 
     // Find the Orion instance with the given id
-    auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
+    auto OrionIt = std::find_if(m_OrionInstances.begin(),
+                                m_OrionInstances.end(),
                                 [USER_ITER](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == USER_ITER->OrionID; });
 
     // Check if the Orion instance was found
@@ -469,7 +479,8 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
         });
 }
 
-void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
+void
+OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
 {
     // Check for the X-User-Id header
     if (!Request.headers().has(U("X-User-Id")))
@@ -482,8 +493,7 @@ void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
     const auto USER_ID = Request.headers().find(U("X-User-Id"))->second;
 
     // Find User in the list of logged in users
-    const auto USER_ITER =
-        std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
+    const auto USER_ITER = std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
     if (USER_ITER == m_LoggedInUsers.end())
     {
         Request.reply(web::http::status_codes::Unauthorized, U("User is not logged in."));
@@ -491,7 +501,8 @@ void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
     }
 
     // Find the Orion instance with the given id
-    auto OrionIt = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
+    auto OrionIt = std::find_if(m_OrionInstances.begin(),
+                                m_OrionInstances.end(),
                                 [USER_ITER](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == USER_ITER->OrionID; });
 
     // Check if the Orion instance was found
@@ -546,7 +557,8 @@ void OrionWebServer::HandleSpeakEndpoint(web::http::http_request Request)
             });
 }
 
-const Orion& OrionWebServer::InstantiateOrionInstance(const std::string& ExistingOrionInstanceID)
+const Orion&
+OrionWebServer::InstantiateOrionInstance(const std::string& ExistingOrionInstanceID)
 {
     // Create a new Orion instance
 
@@ -580,9 +592,9 @@ const Orion& OrionWebServer::InstantiateOrionInstance(const std::string& Existin
     // Check if the Orion instance already exists locally (Only one Orion instance is allowed per user)
 
     // Check if the Orion instance was found locally
-    if (const auto ORION_IT = std::find_if(m_OrionInstances.begin(), m_OrionInstances.end(),
-                                           [ExistingOrionInstanceID](const std::unique_ptr<Orion>& Orion)
-                                           { return Orion->GetCurrentAssistantID() == ExistingOrionInstanceID; });
+    if (const auto ORION_IT = std::find_if(m_OrionInstances.begin(),
+                                           m_OrionInstances.end(),
+                                           [ExistingOrionInstanceID](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == ExistingOrionInstanceID; });
         ORION_IT != m_OrionInstances.end())
     {
         return **ORION_IT;
@@ -600,7 +612,8 @@ const Orion& OrionWebServer::InstantiateOrionInstance(const std::string& Existin
     return *m_OrionInstances.back();
 }
 
-void OrionWebServer::HandleLoginEndpoint(web::http::http_request Request)
+void
+OrionWebServer::HandleLoginEndpoint(web::http::http_request Request)
 {
     // Get the username and password from the request body
     Request.extract_json()
@@ -620,7 +633,7 @@ void OrionWebServer::HandleLoginEndpoint(web::http::http_request Request)
                 std::filesystem::create_directories(DB_PATH.parent_path());
 
                 // Open the database
-                sqlite::database DB {DB_PATH.string()};
+                sqlite::database DB { DB_PATH.string() };
 
                 User Usr {};
 
@@ -646,10 +659,9 @@ void OrionWebServer::HandleLoginEndpoint(web::http::http_request Request)
                 }
 
                 // Get the user_id and orion_id from the database if the username and password are valid OR if the user_id is valid
-                DB << "SELECT user_id,orion_id FROM users WHERE (username = ? AND password = ?) OR user_id = ?;" << UserNameLower << PASSWORD
-                   << USER_ID >>
+                DB << "SELECT user_id,orion_id FROM users WHERE (username = ? AND password = ?) OR user_id = ?;" << UserNameLower << PASSWORD << USER_ID >>
                     [&Usr](const std::string& IDArg, const std::string& OrionIDArg) {
-                        Usr = {IDArg, OrionIDArg};
+                        Usr = { IDArg, OrionIDArg };
                     };
 
                 // Send the response
@@ -657,8 +669,7 @@ void OrionWebServer::HandleLoginEndpoint(web::http::http_request Request)
                 {
                     // Check if user is already logged in
 
-                    if (const auto USER_ITER = std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(),
-                                                            [Usr](const User& User) { return User.UserID == Usr.UserID; });
+                    if (const auto USER_ITER = std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [Usr](const User& User) { return User.UserID == Usr.UserID; });
                         USER_ITER != m_LoggedInUsers.end())
                     {
                         web::json::value Response = web::json::value::object();
@@ -691,7 +702,8 @@ void OrionWebServer::HandleLoginEndpoint(web::http::http_request Request)
             });
 }
 
-void OrionWebServer::HandleRegisterEndpoint(web::http::http_request Request)
+void
+OrionWebServer::HandleRegisterEndpoint(web::http::http_request Request)
 {
     // Get the username and password from the request body
     Request.extract_json()
@@ -721,7 +733,7 @@ void OrionWebServer::HandleRegisterEndpoint(web::http::http_request Request)
                 std::filesystem::create_directories(DB_PATH.parent_path());
 
                 // Open the database
-                sqlite::database DB {DB_PATH.string()};
+                sqlite::database DB { DB_PATH.string() };
 
                 // Create the users table if it does not exist with the user_id, orion_id, username, and password columns.
                 DB << "CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, orion_id TEXT, username TEXT, password TEXT);";
@@ -764,10 +776,9 @@ void OrionWebServer::HandleRegisterEndpoint(web::http::http_request Request)
                 }
 
                 // Insert the user into the database
-                DB << "INSERT INTO users (user_id, orion_id, username, password) VALUES (?, ?, ?, ?);" << USER_ID << ORION_ID << UserNameLower
-                   << PASSWORD;
+                DB << "INSERT INTO users (user_id, orion_id, username, password) VALUES (?, ?, ?, ?);" << USER_ID << ORION_ID << UserNameLower << PASSWORD;
 
-                m_LoggedInUsers.push_back({USER_ID, ORION_ID});
+                m_LoggedInUsers.push_back({ USER_ID, ORION_ID });
 
                 // Send the response
                 web::json::value Response = web::json::value::object();
@@ -778,7 +789,8 @@ void OrionWebServer::HandleRegisterEndpoint(web::http::http_request Request)
             });
 }
 
-void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request) const
+void
+OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request) const
 {
     Request.extract_vector()
         .then([this](const pplx::task<std::vector<unsigned char>>& ExtractVectorTask) { return ExtractVectorTask.get(); })
@@ -786,8 +798,8 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
             [this, Request](std::vector<unsigned char> AudioData)
             {
                 // Get openai api key
-                std::ifstream OpenAIAPIKeyFile {AssetDirectories::ResolveOpenAIKeyFile()};
-                std::string   OpenAIAPIKey {std::istreambuf_iterator<char>(OpenAIAPIKeyFile), std::istreambuf_iterator<char>()};
+                std::ifstream OpenAIAPIKeyFile { AssetDirectories::ResolveOpenAIKeyFile() };
+                std::string   OpenAIAPIKey { std::istreambuf_iterator<char>(OpenAIAPIKeyFile), std::istreambuf_iterator<char>() };
                 if (OpenAIAPIKey.empty())
                 {
                     // Try to get the openai api key from the environment
@@ -807,7 +819,7 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                 }
 
                 // Stream the audio data to a file
-                std::ofstream AudioFile {"audio.mp4", std::ios::binary};
+                std::ofstream AudioFile { "audio.mp4", std::ios::binary };
                 AudioFile.write(reinterpret_cast<const char*>(AudioData.data()), AudioData.size());
                 AudioFile.close();
 
@@ -815,8 +827,8 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                 std::system("ffmpeg -i audio.mp4 -acodec pcm_s16le -ac 1 -ar 16000 audio.wav -y");
 
                 // Read the wav file
-                std::ifstream              WavFile {"audio.wav", std::ios::binary};
-                std::vector<unsigned char> WavData {std::istreambuf_iterator<char>(WavFile), std::istreambuf_iterator<char>()};
+                std::ifstream              WavFile { "audio.wav", std::ios::binary };
+                std::vector<unsigned char> WavData { std::istreambuf_iterator<char>(WavFile), std::istreambuf_iterator<char>() };
 
                 // Get the mime type from the request
                 const auto        MIME_TYPE = MimeTypes::GetMimeType("audio.wav");
@@ -832,8 +844,7 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                 auto AppendText = [&](const std::string& Text) { MultiPartFormData.insert(MultiPartFormData.end(), Text.begin(), Text.end()); };
 
                 // Helper function to append binary data to the vector
-                auto AppendBinary = [&](const std::vector<unsigned char>& Data)
-                { MultiPartFormData.insert(MultiPartFormData.end(), Data.begin(), Data.end()); };
+                auto AppendBinary = [&](const std::vector<unsigned char>& Data) { MultiPartFormData.insert(MultiPartFormData.end(), Data.begin(), Data.end()); };
 
                 // Create the multipart/form-data body
 
@@ -898,8 +909,7 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
                             else
                             {
                                 Response.extract_json()
-                                    .then([this, Request, Response](const pplx::task<web::json::value>& ExtractJsonTask)
-                                          { return ExtractJsonTask.get(); })
+                                    .then([this, Request, Response](const pplx::task<web::json::value>& ExtractJsonTask) { return ExtractJsonTask.get(); })
                                     .then(
                                         [this, Request, Response](const web::json::value& ResponseJson)
                                         {
@@ -915,7 +925,8 @@ void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request)
             });
 }
 
-void OrionWebServer::HandleOrionEventsEndpoint(web::http::http_request Request)
+void
+OrionWebServer::HandleOrionEventsEndpoint(web::http::http_request Request)
 {
     // Register the client for Orion events
     {
@@ -939,19 +950,21 @@ void OrionWebServer::HandleOrionEventsEndpoint(web::http::http_request Request)
     }
 }
 
-void OrionWebServer::SendServerEvent(const OrionEventName& Event, const web::json::value& Data)
+void
+OrionWebServer::SendServerEvent(const OrionEventName& Event, const web::json::value& Data)
 {
     // We push the message to a queue. The queue is processed in a separate thread.
     {
         std::lock_guard<std::mutex> LockGuard(m_OrionEventQueueMutex);
-        m_OrionEventQueue.push({Event, Data});
+        m_OrionEventQueue.push({ Event, Data });
     }
 
     // Notify the thread to process the queue
     m_OrionEventQueueConditionVariable.notify_one();
 }
 
-void OrionWebServer::OrionEventThreadHandler()
+void
+OrionWebServer::OrionEventThreadHandler()
 {
     while (m_IsRunning)
     {
