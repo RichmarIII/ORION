@@ -36,8 +36,7 @@ namespace ORION
             })";
         };
 
-        inline
-        SearchFilesystemFunctionTool()
+        inline SearchFilesystemFunctionTool()
             : FunctionTool(Statics::SEARCH_FILESYSTEM)
         {
         }

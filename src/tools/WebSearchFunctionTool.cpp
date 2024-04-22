@@ -5,8 +5,7 @@ using namespace ORION;
 
 using FunctionResultStatics = FunctionTool::Statics::FunctionResults;
 
-std::string
-WebSearchFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string WebSearchFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     std::cout << "WebSearchFunctionTool::Execute: " << Parameters.at(U("query")).as_string() << std::endl;
 

@@ -7,8 +7,7 @@
 
 using namespace ORION;
 
-std::string
-RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string RecallKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {

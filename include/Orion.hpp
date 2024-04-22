@@ -1,4 +1,6 @@
 #pragma once
+#include "ETTSAudioFormat.hpp"
+
 #include <cpprest/http_client.h>
 #include <cpprest/http_msg.h>
 #include <cpprest/json.h>
@@ -12,34 +14,6 @@
 
 namespace ORION
 {
-    /// @brief The type of audio format that TTS supports
-    enum class ETTSAudioFormat : uint8_t
-    {
-        /// @brief The MP3 audio format. For digital audio compression, preferred by most audio players. file extension: .mp3
-        MP3,
-
-        /// @brief The PCM audio format. Similar to Wav but containing the raw samples in 24kHz (16-bit signed, low-endian), without the header.
-        /// file extension: .pcm
-        PCM,
-
-        /// @brief The Opus audio format. For internet streaming and communication, low latency.
-        /// file extension: .opus
-        Opus,
-
-        /// @brief The FLAC audio format. For lossless audio compression. favored by audio enthusiasts for archiving. file extension: .flac
-        FLAC,
-
-        /// @brief The AAC audio format. For digital audio compression, preferred by YouTube, Android, iOS. file extension: .aac
-        AAC,
-
-        /// @brief The Wav audio format. Uncompressed Wav audio, suitable for low-latency applications to avoid decoding overhead. file extension:
-        /// .wav
-        Wav,
-
-        /// @brief The default audio format
-        Default = MP3
-    };
-
     /// @brief The type of voice that ORION supports
     enum class EOrionVoice : uint8_t
     {
@@ -169,8 +143,8 @@ namespace ORION
         /// SpeakSingleAsync function to speak each part.
         /// @param  Message The message to speak
         /// @param  AUDIO_FORMAT The audio format to use
-        /// @return Nothing. The audio file will be saved to the disk with the format "audio/{assistant_id}/speech_{index}.{ext}"
-        pplx::task<void> SpeakAsync(const std::string& Message, const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default) const;
+        /// @return the audio stream
+        pplx::task<concurrency::streams::istream> SpeakAsync(const std::string& Message, const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default) const;
 
         /// @brief  List the smart devices
         /// @param  Domain The Domain to list the smart devices for
@@ -193,50 +167,43 @@ namespace ORION
 
         /// @brief  Get the current assistant ID
         /// @return The current assistant ID
-        inline std::string
-        GetCurrentAssistantID() const
+        inline std::string GetCurrentAssistantID() const
         {
             return m_CurrentAssistantID;
         }
 
         /// @brief  Get the current thread ID
         /// @return The current thread ID
-        inline std::string
-        GetCurrentThreadID() const
+        inline std::string GetCurrentThreadID() const
         {
             return m_CurrentThreadID;
         }
 
         /// @brief  Get the OpenAI API Key
         /// @return The OpenAI API Key
-        inline std::string
-        GetOpenAIAPIKey() const
+        inline std::string GetOpenAIAPIKey() const
         {
             return m_OpenAIAPIKey;
         }
 
         /// @brief  Get the OpenWeather API Key
         /// @return The OpenWeather API Key
-        inline std::string
-        GetOpenWeatherAPIKey() const
+        inline std::string GetOpenWeatherAPIKey() const
         {
             return m_OpenWeatherAPIKey;
         }
 
-        inline std::string
-        GetHomeAssistantAPIKey() const
+        inline std::string GetHomeAssistantAPIKey() const
         {
             return m_HASSAPIKey;
         }
 
-        inline std::string
-        GetGoogleAPIKey() const
+        inline std::string GetGoogleAPIKey() const
         {
             return m_GoogleAPIKey;
         }
 
-        inline std::string
-        GetGoogleCustomSearchEngineID() const
+        inline std::string GetGoogleCustomSearchEngineID() const
         {
             return m_GoogleCSEID;
         }
@@ -249,8 +216,7 @@ namespace ORION
          *
          * @return The web server that this instance is associated with
          */
-        inline class OrionWebServer&
-        GetWebServer() const
+        inline class OrionWebServer& GetWebServer() const
         {
             return *m_pOrionWebServer;
         }
@@ -295,8 +261,8 @@ namespace ORION
         /// @param  Message The message to speak
         /// @param  INDEX The index of the message
         /// @param  AUDIO_FORMAT The audio format to use
-        /// @return Nothing. The audio file will be saved to the disk with the format "audio/{assistant_id}/speech_{index}.{ext}"
-        pplx::task<void> SpeakSingleAsync(const std::string& Message, const uint8_t INDEX, const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default) const;
+        /// @return the audio stream
+        pplx::task<concurrency::streams::istream> SpeakSingleAsync(const std::string& Message, const uint8_t INDEX, const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default) const;
 
         /// @brief  Split the message into multiple parts if it is too long asynchronously. This is a helper function that is called by the SpeakAsync
         /// function.

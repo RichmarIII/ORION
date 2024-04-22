@@ -19,19 +19,20 @@
 #include <cmark.h>
 
 // Include standard headers
+#include "GUID.hpp"
+
 #include <filesystem>
 #include <thread>
 
 using namespace ORION;
 
-Orion::
-Orion(const std::string&                         ID,
-      std::vector<std::unique_ptr<IOrionTool>>&& Tools,
-      const EOrionIntelligence                   INTELLIGENCE,
-      const EOrionVoice                          VOICE,
-      const char*                                pName,
-      const char*                                pInstructions,
-      const char*                                pDescription)
+Orion::Orion(const std::string&                         ID,
+             std::vector<std::unique_ptr<IOrionTool>>&& Tools,
+             const EOrionIntelligence                   INTELLIGENCE,
+             const EOrionVoice                          VOICE,
+             const char*                                pName,
+             const char*                                pInstructions,
+             const char*                                pDescription)
     : m_Name(pName),
       m_Instructions(pInstructions),
       m_Description(pDescription),
@@ -48,8 +49,7 @@ Orion(const std::string&                         ID,
     }
 }
 
-bool
-Orion::Initialize(OrionWebServer& WebServer, const web::http::http_request& Request)
+bool Orion::Initialize(OrionWebServer& WebServer, const web::http::http_request& Request)
 {
     m_pOrionWebServer     = &WebServer;
     m_pOrionClientContext = &Request;
@@ -63,8 +63,7 @@ Orion::Initialize(OrionWebServer& WebServer, const web::http::http_request& Requ
     return true;
 }
 
-std::string
-Orion::GetUserID() const
+std::string Orion::GetUserID() const
 {
     if (!m_pOrionWebServer)
     {
@@ -74,14 +73,13 @@ Orion::GetUserID() const
     return m_pOrionWebServer->GetUserID(m_CurrentAssistantID);
 }
 
-double
-Orion::GetSemanticSimilarity(const std::string& Content, const std::string& Query) const
+double Orion::GetSemanticSimilarity(const std::string& Content, const std::string& Query) const
 {
     // Create a new http_request to create an embedding for the content
     web::http::http_request VectorSearchRequest(web::http::methods::POST);
     VectorSearchRequest.set_request_uri(U("embeddings"));
     VectorSearchRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    VectorSearchRequest.headers().add("OpenAI-Beta", "assistants=v1");
+    VectorSearchRequest.headers().add("OpenAI-Beta", "assistants=v2");
     VectorSearchRequest.headers().add("Content-Type", "application/json");
 
     // Create json array for the input
@@ -127,8 +125,7 @@ Orion::GetSemanticSimilarity(const std::string& Content, const std::string& Quer
     return DotProduct / (std::sqrt(NormContent) * std::sqrt(NormQuery));
 }
 
-void
-Orion::LoadAPIKeys()
+void Orion::LoadAPIKeys()
 {
     // Load the OpenAI API key from the environment or a file
     {
@@ -226,8 +223,7 @@ Orion::LoadAPIKeys()
     }
 }
 
-pplx::task<void>
-Orion::SendMessageAsync(const std::string& Message, const web::json::array& Files)
+pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::json::array& Files)
 {
     // Upload the files
     auto JFiles = web::json::value::array();
@@ -271,7 +267,7 @@ Orion::SendMessageAsync(const std::string& Message, const web::json::array& File
         web::http::http_request UploadFileRequest(web::http::methods::POST);
         UploadFileRequest.set_request_uri(U("files"));
         UploadFileRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-        UploadFileRequest.headers().add("OpenAI-Beta", "assistants=v1");
+        UploadFileRequest.headers().add("OpenAI-Beta", "assistants=v2");
         UploadFileRequest.headers().add("Content-Type", "multipart/form-data; boundary=" + BOUNDARY);
 
         // Set the body
@@ -301,13 +297,13 @@ Orion::SendMessageAsync(const std::string& Message, const web::json::array& File
     web::http::http_request CreateMessageRequest(web::http::methods::POST);
     CreateMessageRequest.set_request_uri("threads/" + m_CurrentThreadID + "/messages");
     CreateMessageRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    CreateMessageRequest.headers().add("OpenAI-Beta", "assistants=v1");
+    CreateMessageRequest.headers().add("OpenAI-Beta", "assistants=v2");
     CreateMessageRequest.headers().add("Content-Type", "application/json");
 
     web::json::value CreateMessageBody = web::json::value::object();
     CreateMessageBody["content"]       = web::json::value::string(Message);
     CreateMessageBody["role"]          = web::json::value::string("user");
-    CreateMessageBody["file_ids"]      = JFiles;
+    //CreateMessageBody["file_ids"]      = JFiles;
     CreateMessageRequest.set_body(CreateMessageBody);
 
     return m_OpenAIClient->request(CreateMessageRequest)
@@ -325,7 +321,7 @@ Orion::SendMessageAsync(const std::string& Message, const web::json::array& File
                 auto CreateRunRequest = web::http::http_request(web::http::methods::POST);
                 CreateRunRequest.set_request_uri(U("threads/" + m_CurrentThreadID + "/runs"));
                 CreateRunRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-                CreateRunRequest.headers().add("OpenAI-Beta", "assistants=v1");
+                CreateRunRequest.headers().add("OpenAI-Beta", "assistants=v2");
                 CreateRunRequest.headers().add("Content-Type", "application/json");
 
                 auto CreateRunBody            = web::json::value::object();
@@ -428,7 +424,7 @@ Orion::SendMessageAsync(const std::string& Message, const web::json::array& File
                                                         web::http::http_request GetFileRequest(web::http::methods::GET);
                                                         GetFileRequest.set_request_uri(U("files/" + FileID));
                                                         GetFileRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-                                                        GetFileRequest.headers().add("OpenAI-Beta", "assistants=v1");
+                                                        GetFileRequest.headers().add("OpenAI-Beta", "assistants=v2");
 
                                                         auto GetFileResponse = m_OpenAIClient->request(GetFileRequest).get();
 
@@ -497,7 +493,12 @@ Orion::SendMessageAsync(const std::string& Message, const web::json::array& File
                                                     if (ToolIt != m_Tools.end())
                                                     {
                                                         // Get the tool
-                                                        auto pFunctionTool = static_cast<FunctionTool*>(ToolIt->get());
+                                                        auto pFunctionTool = dynamic_cast<FunctionTool*>(ToolIt->get());
+                                                        if (!pFunctionTool)
+                                                        {
+                                                            std::cout << __func__ << ": Tool is not a function tool: " << TOOL_NAME << std::endl;
+                                                            continue;
+                                                        }
 
                                                         // Get the tool call outputs
                                                         auto JFunctionOutputs = pFunctionTool->Execute(*this, TOOL_ARGS);
@@ -542,7 +543,7 @@ Orion::SendMessageAsync(const std::string& Message, const web::json::array& File
 
                                             // Set the headers
                                             SubmitToolOutputsRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-                                            SubmitToolOutputsRequest.headers().add("OpenAI-Beta", "assistants=v1");
+                                            SubmitToolOutputsRequest.headers().add("OpenAI-Beta", "assistants=v2");
                                             SubmitToolOutputsRequest.headers().add("Content-Type", "application/json");
 
                                             // Create the body
@@ -588,14 +589,13 @@ Orion::SendMessageAsync(const std::string& Message, const web::json::array& File
             });
 }
 
-void
-Orion::CreateAssistant()
+void Orion::CreateAssistant()
 {
     // Check if an assistant already exists on the server
     web::http::http_request ListAssistantsRequest(web::http::methods::GET);
     ListAssistantsRequest.set_request_uri(U("assistants"));
     ListAssistantsRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    ListAssistantsRequest.headers().add("OpenAI-Beta", "assistants=v1");
+    ListAssistantsRequest.headers().add("OpenAI-Beta", "assistants=v2");
 
     const web::http::http_response LIST_ASSISTANTS_RESPONSE = m_OpenAIClient->request(ListAssistantsRequest).get();
 
@@ -624,7 +624,7 @@ Orion::CreateAssistant()
         web::http::http_request UpdateAssistantRequest(web::http::methods::POST);
         UpdateAssistantRequest.set_request_uri(U("assistants/" + m_CurrentAssistantID));
         UpdateAssistantRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-        UpdateAssistantRequest.headers().add("OpenAI-Beta", "assistants=v1");
+        UpdateAssistantRequest.headers().add("OpenAI-Beta", "assistants=v2");
         UpdateAssistantRequest.headers().add("Content-Type", "application/json");
 
         web::json::value UpdateAssistantRequestBody = web::json::value::object();
@@ -660,7 +660,7 @@ Orion::CreateAssistant()
         web::http::http_request CreateAssistantRequest(web::http::methods::POST);
         CreateAssistantRequest.set_request_uri(U("assistants"));
         CreateAssistantRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-        CreateAssistantRequest.headers().add("OpenAI-Beta", "assistants=v1");
+        CreateAssistantRequest.headers().add("OpenAI-Beta", "assistants=v2");
         CreateAssistantRequest.headers().add("Content-Type", "application/json");
 
         web::json::value CreateAssistantRequestBody = web::json::value::object();
@@ -698,14 +698,13 @@ Orion::CreateAssistant()
     }
 }
 
-void
-Orion::CreateThread()
+void Orion::CreateThread()
 {
     // Create a new thread
     web::http::http_request CreateThreadRequest(web::http::methods::POST);
     CreateThreadRequest.set_request_uri(U("threads"));
     CreateThreadRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    CreateThreadRequest.headers().add("OpenAI-Beta", "assistants=v1");
+    CreateThreadRequest.headers().add("OpenAI-Beta", "assistants=v2");
     CreateThreadRequest.headers().add("Content-Type", "application/json");
     CreateThreadRequest.set_body(web::json::value::object());
 
@@ -721,81 +720,120 @@ Orion::CreateThread()
     }
 }
 
-void
-Orion::CreateClient()
+void Orion::CreateClient()
 {
     // Create a client to communicate with the OpenAI API
     m_OpenAIClient = std::make_unique<web::http::client::http_client>(U("https://api.openai.com/v1/"));
 }
 
-void
-Orion::SetNewVoice(const EOrionVoice VOICE)
+void Orion::SetNewVoice(const EOrionVoice VOICE)
 {
     m_CurrentVoice = VOICE;
 }
 
-void
-Orion::SetNewIntelligence(const EOrionIntelligence INTELLIGENCE)
+void Orion::SetNewIntelligence(const EOrionIntelligence INTELLIGENCE)
 {
     m_CurrentIntelligence = INTELLIGENCE;
 }
 
-pplx::task<void>
-Orion::SpeakAsync(const std::string& Message, const ETTSAudioFormat AUDIO_FORMAT) const
+pplx::task<concurrency::streams::istream> Orion::SpeakAsync(const std::string& Message, const ETTSAudioFormat AUDIO_FORMAT) const
 {
     // Split the message into multiple messages if it's too long
     return SplitMessageAsync(Message).then(
         [this, AUDIO_FORMAT](const pplx::task<std::vector<std::string>>& SplitMessageTask)
         {
-            const auto        SPLIT_MESSAGES { SplitMessageTask.get() };
-            const std::string AUDIO_DIR { OrionWebServer::AssetDirectories::ResolveOrionAudioDir(m_CurrentAssistantID) };
-
-            // Each orion instance has it's own folder for audio files to avoid conflicts. Append the assistant id to the audio folder.
-            // Create the audio directory if it doesn't exist
-            std::error_code ErrorCode;
-            if (!std::filesystem::exists(AUDIO_DIR, ErrorCode))
-            {
-                // Create the audio directory tree
-                std::filesystem::create_directories(AUDIO_DIR, ErrorCode);
-                if (ErrorCode)
-                {
-                    std::cerr << "Failed to create the audio directory" << std::endl;
-                    return;
-                }
-            }
-
-            // Delete all the audio files in the directory
-            for (const auto& Entry : std::filesystem::directory_iterator(AUDIO_DIR))
-            {
-                std::filesystem::remove(Entry.path(), ErrorCode);
-                if (ErrorCode)
-                {
-                    std::cerr << "Failed to delete the audio file" << std::endl;
-                    return;
-                }
-            }
+            const auto SPLIT_MESSAGES { SplitMessageTask.get() };
 
             // Create a task for each message
-            std::vector<pplx::task<void>> Tasks;
-            uint8_t                       Index = 0;
+            std::vector<pplx::task<concurrency::streams::istream>> Tasks;
+            uint8_t                                                Index = 0;
             for (const auto& Msg : SPLIT_MESSAGES)
             {
                 Tasks.push_back(SpeakSingleAsync(Msg, Index, AUDIO_FORMAT));
                 Index++;
             }
 
-            // Only wait for the first task to complete.  By the time the first task is done, the rest of the tasks should be done as well or
-            // enough generated audio should be available to play without buffering.
-            if (Tasks.begin()->wait() != pplx::task_status::completed)
+            // Convert Audio Format to extension
+            std::string Extension;
+
+            if (AUDIO_FORMAT == ETTSAudioFormat::Opus)
             {
-                std::cout << __FUNCTION__ << ":" << __LINE__ << ":"
-                          << "Task not completed!";
+                Extension = "opus";
             }
+            else if (AUDIO_FORMAT == ETTSAudioFormat::Wav)
+            {
+                Extension = "wav";
+            }
+            else if (AUDIO_FORMAT == ETTSAudioFormat::MP3)
+            {
+                Extension = "mp3";
+            }
+            else if (AUDIO_FORMAT == ETTSAudioFormat::AAC)
+            {
+                Extension = "aac";
+            }
+            else if (AUDIO_FORMAT == ETTSAudioFormat::PCM)
+            {
+                Extension = "pcm";
+            }
+            else if (AUDIO_FORMAT == ETTSAudioFormat::FLAC)
+            {
+                Extension = "flac";
+            }
+
+            return pplx::when_all(std::begin(Tasks), std::end(Tasks))
+                .then(
+                    [this, Extension](const std::vector<concurrency::streams::istream> STREAMS)
+                    {
+                        // Use ffmpeg to concatenate the audio files (system call)
+                        // ffmpeg -i "concat:audio0.wav|audio1.wav|audio2.wav" -acodec copy output.wav
+
+                        // Calculate output directory
+                        const auto OUTPUT_DIRECTORY = std::filesystem::path(OrionWebServer::AssetDirectories::ResolveOrionAudioDir(m_CurrentAssistantID));
+
+                        // Append unique identifier to the output directory to avoid conflicts
+                        const auto UNIQUE_IDENTIFIER                = static_cast<std::string>(GUID::Generate());
+                        const auto OUTPUT_DIRECTORY_WITH_IDENTIFIER = OUTPUT_DIRECTORY / UNIQUE_IDENTIFIER;
+
+                        // Create the output directory if it doesn't exist
+                        std::filesystem::create_directories(OUTPUT_DIRECTORY_WITH_IDENTIFIER);
+
+                        // Create the output file path
+                        const auto ABS_OUTPUT_FILE_PATH = std::filesystem::absolute(OUTPUT_DIRECTORY_WITH_IDENTIFIER / ("speech." + Extension));
+
+                        // Create the command
+                        std::string FfmpegCommand = "ffmpeg -y -i \"concat:";
+                        for (size_t Idx = 0; Idx < STREAMS.size(); ++Idx)
+                        {
+                            // Calculate the audio file path
+                            const auto AUDIO_FILE_PATH = OUTPUT_DIRECTORY_WITH_IDENTIFIER / ("audio" + std::to_string(Idx) + "." + Extension);
+
+                            // Convert audio file path to absolute path
+                            const auto ABSOLUTE_AUDIO_FILE_PATH = std::filesystem::absolute(AUDIO_FILE_PATH);
+
+                            // Save the audio stream to a file
+                            {
+                                auto AudioFileStream       = STREAMS[Idx];
+                                auto AudioFileStreamOutput = concurrency::streams::fstream::open_ostream(ABSOLUTE_AUDIO_FILE_PATH.string(), std::ios::out | std::ios::binary).get();
+                                AudioFileStream.read_to_end(AudioFileStreamOutput.streambuf()).wait();
+                            }
+
+                            FfmpegCommand += ABSOLUTE_AUDIO_FILE_PATH.string() + "|";
+                        }
+                        FfmpegCommand.pop_back(); // Remove the last pipe
+                        FfmpegCommand += "\" -acodec copy " + ABS_OUTPUT_FILE_PATH.string();
+
+                        // Execute the command
+                        std::system(FfmpegCommand.c_str());
+
+                        auto AudioFileStream = concurrency::streams::fstream::open_istream(ABS_OUTPUT_FILE_PATH.string(), std::ios::in | std::ios::binary);
+
+                        return AudioFileStream;
+                    });
         });
 }
 
-web::json::value
-Orion::ListSmartDevices(const std::string& Domain) const
+web::json::value Orion::ListSmartDevices(const std::string& Domain) const
 {
     try
     {
@@ -853,8 +891,7 @@ Orion::ListSmartDevices(const std::string& Domain) const
     }
 }
 
-web::json::value
-Orion::ExecSmartDeviceService(const web::json::value& Devices, const std::string& Service) const
+web::json::value Orion::ExecSmartDeviceService(const web::json::value& Devices, const std::string& Service) const
 {
     try
     {
@@ -902,8 +939,7 @@ Orion::ExecSmartDeviceService(const web::json::value& Devices, const std::string
     }
 }
 
-pplx::task<web::json::value>
-Orion::GetChatHistoryAsync() const
+pplx::task<web::json::value> Orion::GetChatHistoryAsync() const
 {
     // Create a new http_request to get the chat history
     web::http::http_request ListMessagesRequest(web::http::methods::GET);
@@ -916,7 +952,7 @@ Orion::GetChatHistoryAsync() const
     ListMessagesRequest.set_request_uri(ListMessagesRequestURIBuilder.to_string());
 
     ListMessagesRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-    ListMessagesRequest.headers().add("OpenAI-Beta", "assistants=v1");
+    ListMessagesRequest.headers().add("OpenAI-Beta", "assistants=v2");
 
     // Check if the query parameter is present
     const bool IS_MARKDOWN_REQUESTED = ListMessagesRequest.request_uri().query().find(U("markdown=true")) != std::string::npos;
@@ -979,8 +1015,7 @@ Orion::GetChatHistoryAsync() const
             });
 }
 
-pplx::task<void>
-Orion::SpeakSingleAsync(const std::string& Message, const uint8_t INDEX, const ETTSAudioFormat AUDIO_FORMAT) const
+pplx::task<concurrency::streams::istream> Orion::SpeakSingleAsync(const std::string& Message, const uint8_t INDEX, const ETTSAudioFormat AUDIO_FORMAT) const
 {
     // Create a new http_request to get the speech
     web::http::http_request TextToSpeechRequest(web::http::methods::POST);
@@ -1053,46 +1088,23 @@ Orion::SpeakSingleAsync(const std::string& Message, const uint8_t INDEX, const E
 
     TextToSpeechRequest.set_body(TextToSpeechRequestBody);
 
-    // Generate audio file name from index
-    const auto        AUDIO_DIR = std::filesystem::path(OrionWebServer::AssetDirectories::ResolveOrionAudioDir(m_CurrentAssistantID));
-    const std::string FILE_NAME = std::to_string(INDEX) + EXTENSION;
-    const std::string FILE_PATH = (AUDIO_DIR / FILE_NAME).string();
-
     // Send the request and get the response
     return m_OpenAIClient->request(TextToSpeechRequest)
         .then(
-            [FILE_PATH, MimeType](web::http::http_response TextToSpeechResponse)
+            [](const web::http::http_response& TextToSpeechResponse)
             {
                 if (TextToSpeechResponse.status_code() == web::http::status_codes::OK)
                 {
-                    // Stream the response to a file using concurrency::streams::fstream to avoid loading the entire response into memory
-                    // Then return the filename once the file has started streaming
-
-                    // Create a file stream
-                    return concurrency::streams::fstream::open_ostream(FILE_PATH).then(
-                        [TextToSpeechResponse, FILE_PATH, MimeType](const concurrency::streams::ostream& AudioFileStream)
-                        {
-                            // Stream the response to the file
-                            if (TextToSpeechResponse.body().read_to_end(AudioFileStream.streambuf()).wait() != pplx::task_status::completed)
-                            {
-                                std::cout << __FUNCTION__ << ":" << __LINE__ << ": Task was not completed!";
-                            }
-
-                            return pplx::task_from_result();
-                        });
-                }
-                else
-                {
-                    std::cerr << "Failed to get the speech" << std::endl;
-                    std::cout << TextToSpeechResponse.to_string() << std::endl;
+                    return TextToSpeechResponse.body();
                 }
 
-                return pplx::task_from_result();
+                std::cout << __func__ << ": Failed to get the speech: " << TextToSpeechResponse.to_string() << std::endl;
+
+                return concurrency::streams::istream {};
             });
 }
 
-pplx::task<std::vector<std::string>>
-Orion::SplitMessageAsync(const std::string& Message)
+pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string& Message)
 {
     // Split the message into multiple messages if it's too long. But only on periods or newlines.
     // This is to avoid splitting words in half. A message can be longer than x amount of characters if it contains no periods or newlines.

@@ -11,8 +11,7 @@ using namespace ORION;
 
 using FunctionResultStatics = FunctionTool::Statics::FunctionResults;
 
-std::string
-NavigateLinkFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string NavigateLinkFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     std::cout << "NavigateLinkFunctionTool::Execute: " << Parameters.at("link").as_string() << std::endl;
 

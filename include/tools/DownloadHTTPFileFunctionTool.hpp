@@ -28,8 +28,7 @@ namespace ORION
             })";
         };
 
-        inline
-        DownloadHTTPFileFunctionTool()
+        inline DownloadHTTPFileFunctionTool()
             : FunctionTool(Statics::DOWNLOAD_HTTP_FILE)
         {
         }

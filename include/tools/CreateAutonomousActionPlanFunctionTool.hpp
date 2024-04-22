@@ -28,8 +28,7 @@ namespace ORION
             })";
         };
 
-        inline
-        CreateAutonomousActionPlanFunctionTool()
+        inline CreateAutonomousActionPlanFunctionTool()
             : FunctionTool(Statics::CREATE_AUTONOMOUS_ACTION_PLAN)
         {
         }

@@ -2,8 +2,7 @@
 
 using namespace ORION;
 
-int
-main(int argc, char* argv[])
+int main(int argc, char* argv[])
 {
     OrionWebServer WebServer;
     WebServer.Start(5000);

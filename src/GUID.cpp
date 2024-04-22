@@ -6,8 +6,7 @@
 
 using namespace ORION;
 
-GUID
-GUID::Generate()
+GUID GUID::Generate()
 {
     // Get the current time as a timestamp
     const auto TIME_NOW          = std::chrono::system_clock::now().time_since_epoch();

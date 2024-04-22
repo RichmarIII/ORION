@@ -28,8 +28,7 @@ namespace ORION
             })";
         };
 
-        inline
-        ChangeVoiceFunctionTool()
+        inline ChangeVoiceFunctionTool()
             : FunctionTool(Statics::CHANGE_VOICE)
         {
         }

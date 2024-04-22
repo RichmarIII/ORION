@@ -1,18 +1,46 @@
 //On holding the microphone button, start recording
 
 // Variables to hold the MediaRecorder instance and the recorded audio chunks
-var voiceRecorder;
-var audioChunks = [];
+let voiceRecorder;
+let audioChunks = [];
 let micHoldTimer;
 let micHoldThreshold = 250;
 
-var currentMessageBeingComposed = '';
-var currentAnnotations = [];
+let currentMessageBeingComposed = '';
+let currentMessageBeingComposedForSpeech = '';
+let currentAnnotations = [];
+
+let orionSpeakQueue = [];
+let isProcessingOrionSpeak = false;
+
+let audioQueue = [];
+let isPlayingAudio = false;
+
+function playAudio(audioBlob) {
+    // if the audio is playing, add it to the queue
+    if (isPlayingAudio) {
+        audioQueue.push(audioBlob);
+        return;
+    }
+
+    isPlayingAudio = true;
+
+    let audio = document.getElementById('audio');
+    audio.src = URL.createObjectURL(audioBlob);
+    audio.play();
+
+    audio.onended = function () {
+        isPlayingAudio = false;
+        if (audioQueue.length > 0) {
+            playAudio(audioQueue.shift());
+        }
+    };
+}
 
 // Function to start recording
 function startVoiceRecording() {
     // Get the microphone access
-    navigator.mediaDevices.getUserMedia({ audio: true })
+    navigator.mediaDevices.getUserMedia({audio: true})
         .then(stream => {
             audioChunks = [];
 
@@ -36,7 +64,7 @@ function startVoiceRecording() {
                 var mimeType = voiceRecorder.mimeType;
 
                 // Combine the audio chunks into a single Blob
-                var audioBlob = new Blob(audioChunks, { type: mimeType });
+                var audioBlob = new Blob(audioChunks, {type: mimeType});
 
                 // Play a beep sound to indicate that recording has ended.
                 let audio = document.getElementById('audio');
@@ -67,9 +95,9 @@ function startVoiceRecording() {
 
             voiceRecorder.start();
         }).catch(error => {
-            console.error('Error getting microphone access: ', error);
-            alert('Please ensure a microphone is connected and permissions are granted.' + error);
-        });
+        console.error('Error getting microphone access: ', error);
+        alert('Please ensure a microphone is connected and permissions are granted.' + error);
+    });
 }
 
 // Function to stop recording
@@ -92,26 +120,26 @@ document.getElementById('send-button').addEventListener('mouseup', function (eve
     event.preventDefault();
     clearTimeout(micHoldTimer);
     stopVoiceRecording();
-    var messageInput = document.getElementById('message-input').value;
-    var fileInput = document.getElementById('file-input').files;
+    const messageInput = document.getElementById('message-input').value;
+    const fileInput = document.getElementById('file-input').files;
     if (messageInput.trim() !== '' || fileInput.length > 0) {
         console.log('fileInput:', fileInput);
 
         // Create a promise to read the files
-        var promise = new Promise((resolve, reject) => {
-            var Files = [];
-            var filesRead = 0;
+        const promise = new Promise((resolve, reject) => {
+            const Files = [];
+            let filesRead = 0;
 
             if (fileInput.length === 0) {
                 resolve(Files);
             }
 
             // Read the files and add them to the Files array
-            for (var i = 0; i < fileInput.length; i++) {
+            for (let i = 0; i < fileInput.length; i++) {
                 let file = fileInput[i]; // Use let to create a block-scoped variable
                 let reader = new FileReader();
                 reader.onload = function (e) {
-                    Files.push({ name: file.name, data: e.target.result.split(',')[1] }); // Remove the data URL prefix
+                    Files.push({name: file.name, data: e.target.result.split(',')[1]}); // Remove the data URL prefix
                     filesRead++;
                     if (filesRead === fileInput.length) {
                         resolve(Files); // Resolve the promise when all files are read
@@ -158,7 +186,7 @@ document.getElementById('send-button').addEventListener('touchend', function (ev
                 let file = fileInput[i]; // Use let to create a block-scoped variable
                 let reader = new FileReader();
                 reader.onload = function (e) {
-                    Files.push({ name: file.name, data: e.target.result.split(',')[1] }); // Remove the data URL prefix
+                    Files.push({name: file.name, data: e.target.result.split(',')[1]}); // Remove the data URL prefix
                     filesRead++;
                     if (filesRead === fileInput.length) {
                         resolve(Files); // Resolve the promise when all files are read
@@ -189,7 +217,7 @@ document.getElementById('send-button').addEventListener('mouseleave', function (
 });
 
 // Listen for server-sent events
-var orionEventsSource = new EventSource('/orion_events');
+const orionEventsSource = new EventSource('/orion_events');
 orionEventsSource.addEventListener('message.started', function (event) {
     // This event is triggered when Orion starts to compose a message
 
@@ -199,10 +227,10 @@ orionEventsSource.addEventListener('message.started', function (event) {
     // We want to create a new message for Orion initially and then append the delta to the existing message as it is streamed in real-time
 
     // Get the chat area
-    var chatArea = document.getElementById('chat-area');
+    const chatArea = document.getElementById('chat-area');
 
     // Create a new message for orion
-    var newMessage = createOrionMessage('');
+    const newMessage = createOrionMessage('');
 
     // Add the new message to the chat area
     chatArea.appendChild(newMessage);
@@ -211,49 +239,84 @@ orionEventsSource.addEventListener('message.started', function (event) {
     chatArea.scrollTop = chatArea.scrollHeight;
 });
 
+async function orionSpeakAsync(sentence) {
+    if (!isProcessingOrionSpeak) {
+        isProcessingOrionSpeak = true;
+
+        // Send the sentence to the server for text-to-speech conversion
+        fetch('/orion/speak', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-User-Id': localStorage.getItem('user_id')
+            },
+            body: JSON.stringify({message: sentence})
+        }).then(response => response.blob())
+            .then(blob => {
+                isProcessingOrionSpeak = false;
+                playAudio(blob);
+
+                if (orionSpeakQueue.length > 0) {
+                    orionSpeakAsync(orionSpeakQueue.shift());
+                }
+            }).catch(error => {
+            console.error('Error:', error);
+            alert('Failed to convert message to speech: ' + error);
+        });
+    } else {
+        orionSpeakQueue.push(sentence);
+    }
+}
+
 orionEventsSource.addEventListener('message.delta', function (event) {
     // This event is triggered when Orion sends a delta of the message being composed
 
     // We want to append the new message to the existing message created by 'message.started'
     // This is because we are streaming the message in real-time. We don't want to create a new message for each delta.
 
-    // Get the chat area
-    var chatArea = document.getElementById('chat-area');
-
-    // Get the last message in the chat area
-    var newMessage = chatArea.lastChild;
-
-    // Append the new message to the existing message
-    var messageDiv = newMessage.querySelector('.message');
-
     currentMessageBeingComposed += JSON.parse(event.data).message;
 
-    // Convert the message to markdown
-    var orionText = messageDiv.innerHTML;
+    currentMessageBeingComposedForSpeech += JSON.parse(event.data).message;
+
+    // Grab the first sentence of the message (up to the first period, exclamation point, or question mark)
+    const sentence = currentMessageBeingComposedForSpeech.split(/\.\!\?/)[0];
+
+    if (sentence.endsWith('.') || sentence.endsWith('!') || sentence.endsWith('?') && sentence.length > 15) {
+        // Remove the first sentence from the message
+        currentMessageBeingComposedForSpeech = currentMessageBeingComposedForSpeech.substring(sentence.length);
+
+        orionSpeakAsync(sentence);
+    }
 
     // Fetch markdown from the server
     fetch('/markdown',
         {
             method: 'POST',
             headers:
-            {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message: currentMessageBeingComposed })
+                {
+                    'Content-Type': 'application/json'
+                },
+            body: JSON.stringify({message: currentMessageBeingComposed})
         })
         .then(response => response.json())
         .then(jmarkdown => {
-            messageDiv.innerHTML = jmarkdown.message;
+            // Get the chat area
+            const chatArea = document.getElementById('chat-area');
 
-            // Process the new message for code blocks and add copy buttons
-            processCodeBlocks(newMessage);
+            // Get the last message in the chat area
+            const newMessage = chatArea.lastChild;
+
+            // Append the new message to the existing message
+            const messageDiv = newMessage.querySelector('.message');
+
+            messageDiv.innerHTML = jmarkdown.message;
 
             // scroll to the bottom of the chat area
             chatArea.scrollTop = chatArea.scrollHeight;
         }).catch(error => {
-            console.error('Error:', error);
-            alert('Failed to convert message to markdown: ' + error);
-        });
+        console.error('Error:', error);
+        alert('Failed to convert message to markdown: ' + error);
+    });
 });
 
 orionEventsSource.addEventListener('message.in_progress', function (event) {
@@ -262,13 +325,13 @@ orionEventsSource.addEventListener('message.in_progress', function (event) {
     // We want to update the existing message container with the in-progress message
 
     // Get the chat area
-    var chatArea = document.getElementById('chat-area');
+    const chatArea = document.getElementById('chat-area');
 
     // Get the last message in the chat area
-    var lastMessage = chatArea.lastChild;
+    const lastMessage = chatArea.lastChild;
 
     // Create a new div element for the in-progress message
-    var inProgressDiv = document.createElement('div');
+    const inProgressDiv = document.createElement('div');
     inProgressDiv.className = 'message-status';
     inProgressDiv.textContent = 'Orion is composing a message...';
 
@@ -280,18 +343,25 @@ orionEventsSource.addEventListener('message.in_progress', function (event) {
 orionEventsSource.addEventListener('message.completed', function (event) {
     // This event is triggered when Orion completes composing a message
 
-    currentMessageBeingComposed = '';
+    // Play the final sentence if it exists
+    if (currentMessageBeingComposedForSpeech.length > 0) {
+        orionSpeakAsync(currentMessageBeingComposedForSpeech);
+    }
+
+    currentMessageBeingComposedForSpeech = '';
 
     // We want to append the final message to the existing message created by 'message.started' and 'message.delta'
 
     // Get the chat area
-    var chatArea = document.getElementById('chat-area');
+    const chatArea = document.getElementById('chat-area');
 
     // Get the last message in the chat area
-    var lastMessage = chatArea.lastChild;
+    const lastMessage = chatArea.querySelector('.orion-message-container:last-child')
 
     // convert the message to markdown
-    var orionText = lastMessage.querySelector('.message').innerHTML;
+    let orionText = currentMessageBeingComposed;
+
+    currentMessageBeingComposed = '';
 
     // Loop through the annotations and replace the placeholders in the message with the actual values
     currentAnnotations.forEach(annotation => {
@@ -309,10 +379,10 @@ orionEventsSource.addEventListener('message.completed', function (event) {
         {
             method: 'POST',
             headers:
-            {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message: orionText })
+                {
+                    'Content-Type': 'application/json'
+                },
+            body: JSON.stringify({message: orionText})
         })
         .then(response => response.json())
         .then(jmarkdown => {
@@ -329,9 +399,9 @@ orionEventsSource.addEventListener('message.completed', function (event) {
             chatArea.scrollTop = chatArea.scrollHeight;
 
         }).catch(error => {
-            console.error('Error:', error);
-            alert('Failed to convert message to markdown: ' + error);
-        });
+        console.error('Error:', error);
+        alert('Failed to convert message to markdown: ' + error);
+    });
 });
 
 orionEventsSource.addEventListener('message.annotation.created', function (event) {
@@ -345,10 +415,10 @@ orionEventsSource.addEventListener('upload.file.requested', function (event) {
     // This event is triggered when Orion requests a file upload from the user
 
     // Get the chat area
-    var chatArea = document.getElementById('chat-area');
+    const chatArea = document.getElementById('chat-area');
 
-    var jdata = JSON.parse(event.data);
-    var filePath = jdata.file_path;
+    const jdata = JSON.parse(event.data);
+    const filePath = jdata.file_path;
 
     console.log('Requested upload file:', filePath);
 });
@@ -381,16 +451,16 @@ async function playAudioFilesSequentially(index = 0) {
         }
     }).then(response => response.blob())
         .then(blob => {
-            let audio = document.getElementById('audio');
-            audio.src = URL.createObjectURL(blob);
-            audio.preload = 'none';
-            audio.play();
+                let audio = document.getElementById('audio');
+                audio.src = URL.createObjectURL(blob);
+                audio.preload = 'none';
+                audio.play();
 
-            // When the audio has finished playing, play the next audio file
-            audio.onended = function () {
-                playAudioFilesSequentially(index + 1);
-            };
-        }
+                // When the audio has finished playing, play the next audio file
+                audio.onended = function () {
+                    playAudioFilesSequentially(index + 1);
+                };
+            }
         ).catch(error => {
             console.error('Error:', error);
             alert('Failed to play audio: ' + error);
@@ -400,26 +470,26 @@ async function playAudioFilesSequentially(index = 0) {
 // Add event listener to text input to send message on pressing enter
 document.getElementById('message-input').addEventListener('keypress', function (e) {
     if (e.key === 'Enter') {
-        var messageInput = document.getElementById('message-input').value;
-        var fileInput = document.getElementById('file-input').files;
+        const messageInput = document.getElementById('message-input').value;
+        const fileInput = document.getElementById('file-input').files;
         if (messageInput.trim() !== '' || fileInput.length > 0) {
             console.log('fileInput:', fileInput);
 
             // Create a promise to read the files
-            var promise = new Promise((resolve, reject) => {
-                var Files = [];
-                var filesRead = 0;
+            const promise = new Promise((resolve, reject) => {
+                const Files = [];
+                let filesRead = 0;
 
                 if (fileInput.length === 0) {
                     resolve(Files);
                 }
 
                 // Read the files and add them to the Files array
-                for (var i = 0; i < fileInput.length; i++) {
+                for (let i = 0; i < fileInput.length; i++) {
                     let file = fileInput[i]; // Use let to create a block-scoped variable
                     let reader = new FileReader();
                     reader.onload = function (e) {
-                        Files.push({ name: file.name, data: e.target.result.split(',')[1] }); // Remove the data URL prefix
+                        Files.push({name: file.name, data: e.target.result.split(',')[1]}); // Remove the data URL prefix
                         filesRead++;
                         if (filesRead === fileInput.length) {
                             resolve(Files); // Resolve the promise when all files are read
@@ -435,9 +505,10 @@ document.getElementById('message-input').addEventListener('keypress', function (
             // Wait for the files to be read
             promise.then((Files) => {
                 // Add the message to the chat area
-                addMessageToChat(messageInput, Files);
-                document.getElementById('message-input').value = '';
-                document.getElementById('file-input').value = '';
+                addMessageToChat(messageInput, Files).then(() => {
+                    document.getElementById('message-input').value = '';
+                    document.getElementById('file-input').value = '';
+                });
             }).catch((error) => {
                 console.error('Error reading files:', error);
             });
@@ -452,7 +523,7 @@ document.getElementById('new-chat-button').addEventListener('click', function ()
 
 document.addEventListener('DOMContentLoaded', function () {
     // Get the user id from local storage
-    var userID = localStorage.getItem('user_id');
+    const userID = localStorage.getItem('user_id');
     if (userID === null) {
         console.log('User not found in local storage');
 
@@ -461,7 +532,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Get the chat area
-    var chatArea = document.getElementById('chat-area');
+    const chatArea = document.getElementById('chat-area');
 
     // Fetch the chat messages from the server
     fetch('/chat_history?markdown=true', {
@@ -472,26 +543,26 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }).then(response => response.json())
         .then(messages => {
-            var chatArea = document.getElementById('chat-area');
+            let newMessage;
+            const chatArea = document.getElementById('chat-area');
 
             // Loop through the messages and add them to the chat area
-            for (var i = 0; i < messages.length; i++) {
+            for (let i = 0; i < messages.length; i++) {
                 if (messages[i].role === 'user') {
                     // Create a new message for the user
-                    var newMessage = createUserMessage(messages[i].message);
+                    newMessage = createUserMessage(messages[i].message);
                     // Add the new message to the chat area
                     chatArea.appendChild(newMessage);
-                }
-                else {
+                } else {
                     // Create a new message for orion
-                    var newMessage = createOrionMessage(messages[i].message);
+                    newMessage = createOrionMessage(messages[i].message);
                     // Add the new message to the chat area
                     chatArea.appendChild(newMessage);
                 }
             }
 
             // Process the new messages for code blocks and add copy buttons
-            var newMessages = chatArea.querySelectorAll('.orion-message-container');
+            const newMessages = chatArea.querySelectorAll('.orion-message-container');
             newMessages.forEach(newMessage => {
                 processCodeBlocks(newMessage);
             });
@@ -500,18 +571,18 @@ document.addEventListener('DOMContentLoaded', function () {
             chatArea.scrollTop = chatArea.scrollHeight;
 
         }).catch(error => {
-            console.error('Error:', error);
-            alert('Failed to fetch chat history: ' + error);
-        });
+        console.error('Error:', error);
+        alert('Failed to fetch chat history: ' + error);
+    });
 });
 
 // Function to process the newly added message for code blocks and add copy buttons
 function processCodeBlocks(newMessage) {
-    var codeBlocks = newMessage.querySelectorAll('pre code');
+    const codeBlocks = newMessage.querySelectorAll('pre code');
     if (codeBlocks.length > 0) {
         codeBlocks.forEach(codeBlock => {
             // Add copy button to each code block
-            var copyButton = document.createElement('button');
+            const copyButton = document.createElement('button');
             copyButton.textContent = 'Copy';
             copyButton.className = 'copy-button';
             copyButton.addEventListener('click', function () {
@@ -521,12 +592,14 @@ function processCodeBlocks(newMessage) {
                     console.error('Failed to copy code to clipboard', err);
                 });
             });
+
+            // Add the copy button to the code block
             codeBlock.parentNode.insertBefore(copyButton, codeBlock);
         });
     }
 
     // Highlight all code elements within the newMessage
-    var codeElements = newMessage.querySelectorAll('code');
+    const codeElements = newMessage.querySelectorAll('code');
     if (codeElements.length > 0) {
         codeElements.forEach(function (code) {
             hljs.highlightElement(code);
@@ -539,17 +612,17 @@ function processCodeBlocks(newMessage) {
 // Function to create html element for an orion message
 function createOrionMessage(message) {
     // Create a new div element for the message-container
-    var messageContainer = document.createElement('div');
+    const messageContainer = document.createElement('div');
     messageContainer.className = 'orion-message-container';
 
     // Create a new div element for the image of the speaker
-    var image = document.createElement('img');
+    const image = document.createElement('img');
     image.src = 'orion.svg';
     image.alt = 'Orion';
     image.className = 'image';
 
     // Create a new div element for the message
-    var messageDiv = document.createElement('div');
+    const messageDiv = document.createElement('div');
     messageDiv.className = 'message';
     messageDiv.innerHTML = message;
 
@@ -563,17 +636,17 @@ function createOrionMessage(message) {
 // Function to create html element for a user message
 function createUserMessage(message) {
     // Create a new div element for the message-container
-    var messageContainer = document.createElement('div');
+    const messageContainer = document.createElement('div');
     messageContainer.className = 'user-message-container';
 
     // Create a new div element for the image of the speaker
-    var image = document.createElement('img');
+    const image = document.createElement('img');
     image.src = 'user.svg';
     image.alt = 'User';
     image.className = 'image';
 
     // Create a new div element for the message
-    var messageDiv = document.createElement('div');
+    const messageDiv = document.createElement('div');
     messageDiv.className = 'message';
     messageDiv.innerHTML = message;
 
@@ -587,10 +660,10 @@ function createUserMessage(message) {
 // Function to add a message to the chat area
 async function addMessageToChat(message, files) {
     if (message.trim() !== '') {
-        var chatArea = document.getElementById('chat-area');
+        const chatArea = document.getElementById('chat-area');
 
         // create json object for the message
-        var jmessage = {
+        const jmessage = {
             message: message,
         };
 
@@ -604,19 +677,16 @@ async function addMessageToChat(message, files) {
         })
             .then(response => response.json())
             .then(jmarkdown => {
-                var chatArea = document.getElementById('chat-area');
+                const chatArea = document.getElementById('chat-area');
 
                 // get message from markdown
                 const markdown = jmarkdown.message;
 
                 // Create a new message for the user
-                var newMessage = createUserMessage(markdown);
+                const newMessage = createUserMessage(markdown);
 
                 // Add the new message to the chat area
                 chatArea.appendChild(newMessage);
-
-                // Process the new message for code blocks and add copy buttons
-                processCodeBlocks(newMessage);
 
                 // Scroll to the bottom of the chat area
                 chatArea.scrollTop = chatArea.scrollHeight;
@@ -627,7 +697,7 @@ async function addMessageToChat(message, files) {
             });
 
         // Create a body that contains the message and the files
-        var body = {
+        const body = {
             message: message,
             files: [...files] // Convert the FileList to an array
         };
@@ -643,8 +713,7 @@ async function addMessageToChat(message, files) {
         }).then(response => {
             if (response.ok) {
                 console.log('Message sent successfully');
-            }
-            else {
+            } else {
                 console.error('Failed to send message:', response.statusText);
                 alert('Failed to send message: ' + response.statusText);
             }

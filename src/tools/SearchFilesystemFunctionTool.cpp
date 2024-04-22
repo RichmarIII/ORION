@@ -5,8 +5,7 @@
 
 using namespace ORION;
 
-std::string
-SearchFilesystemFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string SearchFilesystemFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {

@@ -89,6 +89,7 @@ set(HEADERS
         include/tools/RecallKnowledgeFunctionTool.hpp
         include/tools/UpdateKnowledgeFunctionTool.hpp
         include/MiscConstants.hpp
+        include/ETTSAudioFormat.hpp
 )
 
 # Define the executable based on the explicitly listed source files
@@ -126,6 +127,14 @@ add_custom_command(TARGET ORION POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
         ${CMAKE_SOURCE_DIR}/.hass_api_key.txt
         $<TARGET_FILE_DIR:ORION>/.hass_api_key.txt
+
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_SOURCE_DIR}/.google_api_key.txt
+        $<TARGET_FILE_DIR:ORION>/.google_api_key.txt
+
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_SOURCE_DIR}/.google_cse_id.txt
+        $<TARGET_FILE_DIR:ORION>/.google_cse_id.txt
 
         COMMAND ${CMAKE_COMMAND} -E copy
         ${CMAKE_SOURCE_DIR}/cert.pem

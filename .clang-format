@@ -19,6 +19,7 @@ AllowShortFunctionsOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
 AlwaysBreakTemplateDeclarations: Yes
 BinPackArguments: false
@@ -84,7 +85,6 @@ SpacesInLineCommentPrefix:
   Minimum: 1
   Maximum: 1
 SpaceInEmptyBlock: false
-AlwaysBreakAfterReturnType: AllDefinitions
 AllowShortEnumsOnASingleLine: false
 ShortNamespaceLines: 0
 PenaltyBreakTemplateDeclaration: 0

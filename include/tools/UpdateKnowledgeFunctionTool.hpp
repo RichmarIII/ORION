@@ -47,8 +47,7 @@ namespace ORION
             })";
         };
 
-        inline
-        UpdateKnowledgeFunctionTool()
+        inline UpdateKnowledgeFunctionTool()
             : FunctionTool(Statics::UPDATE_KNOWLEDGE)
         {
         }

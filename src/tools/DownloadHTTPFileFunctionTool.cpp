@@ -7,8 +7,7 @@ using namespace ORION;
 
 using FunctionResultStatics = FunctionTool::Statics::FunctionResults;
 
-std::string
-DownloadHTTPFileFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string DownloadHTTPFileFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     std::cout << std::endl << "DownloadHTTPFileFunctionTool::Execute: " << Parameters.serialize() << std::endl;
 

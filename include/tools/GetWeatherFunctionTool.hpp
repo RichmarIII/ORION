@@ -33,8 +33,7 @@ namespace ORION
             })";
         };
 
-        inline
-        GetWeatherFunctionTool()
+        inline GetWeatherFunctionTool()
             : FunctionTool(Statics::GET_WEATHER)
         {
         }

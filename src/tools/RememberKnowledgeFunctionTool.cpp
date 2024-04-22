@@ -8,8 +8,7 @@
 
 using namespace ORION;
 
-std::string
-RememberKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string RememberKnowledgeFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {

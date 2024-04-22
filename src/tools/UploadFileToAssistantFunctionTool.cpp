@@ -6,8 +6,7 @@
 
 using namespace ORION;
 
-std::string
-UploadFileToAssistantFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string UploadFileToAssistantFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     std::cout << std::endl << "UploadFileToAssistantFunctionTool::Execute: " << Parameters.serialize() << std::endl;
 

@@ -13,8 +13,7 @@ namespace ORION
         /// @brief The id of the orion instance the user is logged into. Should be set on instantiation. `User user{SOME_ID, SOME_ORION_ID}`;
         /*const*/ std::string OrionID;
 
-        explicit
-        operator bool() const
+        explicit operator bool() const
         {
             return !UserID.empty() && !OrionID.empty();
         }

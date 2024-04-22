@@ -3,8 +3,7 @@
 
 using namespace ORION;
 
-std::string
-GetWeatherFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string GetWeatherFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     // Default units is "imperial"
     std::string Units = "imperial";

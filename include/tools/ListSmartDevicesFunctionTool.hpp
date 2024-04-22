@@ -29,8 +29,7 @@ namespace ORION
             })";
         };
 
-        inline
-        ListSmartDevicesFunctionTool()
+        inline ListSmartDevicesFunctionTool()
             : FunctionTool(Statics::LIST_SMART_DEVICES)
         {
         }

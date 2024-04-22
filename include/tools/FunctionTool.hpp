@@ -35,26 +35,22 @@ namespace ORION
         /// @param Function The json string representing the function
         /// @note The function must be a valid JSON string
         /// @see OrionFunctionStatics   For examples of valid functions
-        explicit inline
-        FunctionTool(const std::string& Function)
+        explicit inline FunctionTool(const std::string& Function)
             : m_Function(Function)
         {
         }
 
-        inline EOrionToolType
-        GetType() const override
+        inline EOrionToolType GetType() const override
         {
             return EOrionToolType::Function;
         }
 
-        inline std::string
-        ToJson() const override
+        inline std::string ToJson() const override
         {
             return R"({"type":"function", "function":)" + U(m_Function) + "}";
         }
 
-        inline std::string
-        GetName() const override
+        inline std::string GetName() const override
         {
             return web::json::value::parse(U(m_Function)).at("name").as_string();
         }

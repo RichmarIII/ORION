@@ -86,8 +86,7 @@ namespace ORION
             static constexpr auto USER_KNOWLEDGE_DIR_TEMPLATE = ASSETS_DIR "/" DATABASE_DIR "/" USER_ID_PLACEHOLDER "/knowledge";
 
             template <typename... Args>
-            static std::string
-            ResolveTemplate(const std::string& TemplateString, Args&&... Values)
+            static std::string ResolveTemplate(const std::string& TemplateString, Args&&... Values)
             {
                 std::regex        RegexPattern("\\{.*?\\}");
                 std::stringstream ResultStream;
@@ -111,20 +110,17 @@ namespace ORION
                 return ResultStream.str();
             }
 
-            static inline std::string
-            ResolveOrionAudioDir(const std::string& OrionId)
+            static inline std::string ResolveOrionAudioDir(const std::string& OrionId)
             {
                 return ResolveTemplate(ORION_AUDIO_DIR_TEMPLATE, STATIC_AUDIO_DIR, OrionId);
             }
 
-            static inline std::string
-            ResolveUserKnowledgeDir(const std::string& UserId)
+            static inline std::string ResolveUserKnowledgeDir(const std::string& UserId)
             {
                 return ResolveTemplate(USER_KNOWLEDGE_DIR_TEMPLATE, UserId);
             }
 
-            static inline std::string
-            ResolveOpenAIKeyFile()
+            static inline std::string ResolveOpenAIKeyFile()
             {
                 return OPENAI_API_KEY_FILE;
             }
@@ -203,8 +199,7 @@ namespace ORION
          * @param OrionInstanceID The ID of the Orion instance.
          * @return The User ID associated with the Orion instance.
          */
-        inline std::string
-        GetUserID(const std::string& OrionInstanceID) const
+        inline std::string GetUserID(const std::string& OrionInstanceID) const
         {
             // Find the user with the given Orion instance ID
             auto UserIt = std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [&](const User& UserArg) { return UserArg.OrionID == OrionInstanceID; });
@@ -239,13 +234,6 @@ namespace ORION
         /// @example Response: The contents of the image.png file served from the assets directory
         void HandleAssetFileEndpoint(web::http::http_request Request);
 
-        /// @brief  The /speech/<index> endpoint is used to serve speech asset files (audio files).
-        ///         Defaults to mp3 format if no format is specified.
-        /// @param Request The HTTP request
-        /// @example curl -X GET http://localhost:5000/speech/{index}?format=mp3
-        /// @example Response: The contents of the audio file served from the speech directory
-        void HandleSpeechAssetFileEndpoint(web::http::http_request Request);
-
         /// @brief  The /markdown endpoint is used to convert a message to markdown
         /// @param  Request The HTTP request
         /// @example curl -X POST -d {"message": "Hello, Orion!"} http://localhost:5000/markdown
@@ -261,14 +249,13 @@ namespace ORION
         /// @example Response: [{ "role": "user", "message": "<p>Hello, Orion!</p>" }, { "role": "orion", "message": "<p>Hello, user!</p>" }]
         void HandleChatHistoryEndpoint(web::http::http_request Request);
 
-        /// @brief  The /speak endpoint is used to make Orion speak a message.
+        /// @brief  The /orion/speak endpoint is used to make Orion speak a message.
         /// Supported audio formats: mp3, opus, aac, flac, wav, and pcm
-        /// Audio is segmented into multiple files if the message is too long.
         /// @param  Request The HTTP request
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/speak
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/speak?format=opus
         /// @example curl -X POST -d "Hello, Orion!" http://localhost:5000/speak?format=wav
-        /// @note The audio file is saved to the your orion instance's speech directory. @see AssetDirectories::ResolveOrionAudioDir
+        /// @note The audio data is streamed back to the client
         void HandleSpeakEndpoint(web::http::http_request Request);
 
         /// @brief  The /login endpoint is used to log in to an Orion instance.

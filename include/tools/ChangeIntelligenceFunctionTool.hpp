@@ -20,7 +20,7 @@ namespace ORION
                     "properties" : {
                         "intelligence" : {
                             "type" : "string",
-                            "enum" : [ "base", "super" ],
+                            "enum" : [ "base", "advanced" ],
                             "description" : "The intelligence to change to."
                         },
                         "list" : {
@@ -34,8 +34,7 @@ namespace ORION
             })";
         };
 
-        inline
-        ChangeIntelligenceFunctionTool()
+        inline ChangeIntelligenceFunctionTool()
             : FunctionTool(Statics::CHANGE_INTELLIGENCE)
         {
         }

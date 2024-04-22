@@ -28,8 +28,7 @@ namespace ORION
             })";
         };
 
-        inline
-        WebSearchFunctionTool()
+        inline WebSearchFunctionTool()
             : FunctionTool(Statics::WEB_SEARCH)
         {
         }

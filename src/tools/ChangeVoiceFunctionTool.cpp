@@ -3,8 +3,7 @@
 
 using namespace ORION;
 
-std::string
-ChangeVoiceFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+std::string ChangeVoiceFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {
