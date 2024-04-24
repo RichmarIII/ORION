@@ -212,12 +212,12 @@ namespace ORION
         /// @param  Request The HTTP request
         void HandleRequest(const web::http::http_request& Request);
 
-        /// @brief  The /send_message endpoint is used to send a message to Orion. optionally converting it to markdown via the ?markdown=true query
+        /// @brief  The /orion/send_message endpoint is used to send a message to Orion. optionally converting it to markdown via the ?markdown=true query
         /// parameter
         /// @param  Request The HTTP request
-        /// @example curl -X POST -d {"message": "Hello, Orion!"} http://localhost:5000/send_message
+        /// @example curl -X POST -d {"message": "Hello, Orion!"} http://localhost:5000/orion/send_message
         /// @example Response: "Hello, user!"
-        /// @example curl -X POST -d {"message": "Hello, Orion!"} http://localhost:5000/send_message?markdown=true
+        /// @example curl -X POST -d {"message": "Hello, Orion!"} http://localhost:5000/orion/send_message?markdown=true
         /// @example Response: {"message": "<p>Hello, user!</p>"}
         void HandleSendMessageEndpoint(web::http::http_request Request);
 
@@ -240,12 +240,12 @@ namespace ORION
         /// @example Response: {"message": "<p>Hello, Orion!</p>"}
         void HandleMarkdownEndpoint(web::http::http_request Request) const;
 
-        /// @brief  The /chat_history endpoint is used to retrieve the chat history.
+        /// @brief  The /orion/chat_history endpoint is used to retrieve the chat history.
         /// Optionally converting it to markdown via the ?markdown=true query parameter
         /// @param  Request The HTTP request
-        /// @example curl -X GET http://localhost:5000/chat_history
+        /// @example curl -X GET http://localhost:5000/orion/chat_history
         /// @example Response: [{ "role": "user", "message": "Hello, Orion!" }, { "role": "orion", "message": "Hello, user!" }]
-        /// @example curl -X GET http://localhost:5000/chat_history?markdown=true
+        /// @example curl -X GET http://localhost:5000/orion/chat_history?markdown=true
         /// @example Response: [{ "role": "user", "message": "<p>Hello, Orion!</p>" }, { "role": "orion", "message": "<p>Hello, user!</p>" }]
         void HandleChatHistoryEndpoint(web::http::http_request Request);
 
@@ -277,14 +277,14 @@ namespace ORION
         /// @note   The user id should be stored and used in the X-User-Id header for all requests.
         void HandleRegisterEndpoint(web::http::http_request Request);
 
-        /// @brief  The /stt endpoint is used to convert speech to text.
+        /// @brief  The /orion/transcribe endpoint is used to convert speech to text.
         /// The audio file is sent in the body of the request.
         /// @param  Request The HTTP request
-        /// @example curl -X POST -d @audio_file http://localhost:5000/stt
+        /// @example curl -X POST -d @audio_file http://localhost:5000/orion/transcribe
         /// @example Response: {"message": "Hello, Orion!"}
-        /// example curl -X POST -d @audio_file http://localhost:5000/stt?markdown=true
+        /// example curl -X POST -d @audio_file http://localhost:5000//orion/transcribe?markdown=true
         /// @example Response: {"message": "<p>Hello, Orion!</p>"}
-        void HandleSpeechToTextEndpoint(web::http::http_request Request) const;
+        void HandleTranscribeEndpoint(web::http::http_request Request) const;
 
         /**
          * @brief Handles the /orion_events endpoint. This endpoint is used to subscribe to Orion events.

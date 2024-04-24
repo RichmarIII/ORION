@@ -133,7 +133,7 @@ void OrionWebServer::HandleRequest(const web::http::http_request& Request)
     m_CurrentRequest = Request;
 
     // Dispatch the request to the appropriate handler
-    if (PATH == U("/send_message"))
+    if (PATH == U("/orion/send_message"))
     {
         HandleSendMessageEndpoint(Request);
     }
@@ -145,7 +145,7 @@ void OrionWebServer::HandleRequest(const web::http::http_request& Request)
     {
         HandleMarkdownEndpoint(Request);
     }
-    else if (PATH == U("/chat_history"))
+    else if (PATH == U("/orion/chat_history"))
     {
         HandleChatHistoryEndpoint(Request);
     }
@@ -161,9 +161,9 @@ void OrionWebServer::HandleRequest(const web::http::http_request& Request)
     {
         HandleRegisterEndpoint(Request);
     }
-    else if (PATH == U("/stt"))
+    else if (PATH == U("/orion/transcribe"))
     {
-        HandleSpeechToTextEndpoint(Request);
+        HandleTranscribeEndpoint(Request);
     }
     // Handle orion_event endpoint
     else if (PATH == U("/orion_events"))
@@ -218,13 +218,13 @@ void OrionWebServer::HandleSendMessageEndpoint(web::http::http_request Request)
             [this, OrionIt, Request, IS_MARKDOWN_REQUESTED](web::json::value JsonRequestBody)
             {
                 // Get the message from the request body
-                auto Message = JsonRequestBody.at(U("message")).as_string();
+                const auto MESSAGE = JsonRequestBody.at(U("message")).as_string();
 
                 // Get the files from the request body
-                auto Files = JsonRequestBody.has_field(U("files")) ? JsonRequestBody.at(U("files")).as_array() : web::json::value::array().as_array();
+                const auto FILES = JsonRequestBody.has_field(U("files")) ? JsonRequestBody.at(U("files")).as_array() : web::json::value::array().as_array();
 
                 // Send the message to the Orion instance
-                (*OrionIt)->SendMessageAsync(Message, Files);
+                (*OrionIt)->SendMessageAsync(MESSAGE, FILES);
 
                 // Send the response
                 Request.reply(web::http::status_codes::OK);
@@ -314,7 +314,6 @@ void OrionWebServer::HandleMarkdownEndpoint(web::http::http_request Request) con
                 Response[U("message")]    = web::json::value::string(RequestMessage);
 
                 // Send the response
-                // ReSharper disable once CppExpressionWithoutSideEffects
                 Request.reply(web::http::status_codes::OK, Response);
             });
 }
@@ -693,7 +692,7 @@ void OrionWebServer::HandleRegisterEndpoint(web::http::http_request Request)
             });
 }
 
-void OrionWebServer::HandleSpeechToTextEndpoint(web::http::http_request Request) const
+void OrionWebServer::HandleTranscribeEndpoint(web::http::http_request Request) const
 {
     Request.extract_vector()
         .then([this](const pplx::task<std::vector<unsigned char>>& ExtractVectorTask) { return ExtractVectorTask.get(); })

@@ -1,5 +1,3 @@
-//On holding the microphone button, start recording
-
 // Variables to hold the MediaRecorder instance and the recorded audio chunks
 let voiceRecorder;
 let audioChunks = [];
@@ -11,30 +9,34 @@ let currentMessageBeingComposedForSpeech = '';
 let currentAnnotations = [];
 
 let orionSpeakQueue = [];
-let isProcessingOrionSpeak = false;
+let shouldProcessOrionSpeakQueue = false;
 
 let audioQueue = [];
-let isPlayingAudio = false;
+let shouldProcessAudioQueue = false;
 
-function playAudio(audioBlob) {
-    // if the audio is playing, add it to the queue
-    if (isPlayingAudio) {
-        audioQueue.push(audioBlob);
-        return;
-    }
+async function playAudioAsync(audioBlob) {
+    return new Promise((resolve, reject) => {
+        let audio = document.getElementById('audio');
+        audio.src = URL.createObjectURL(audioBlob);
+        audio.preload = 'none';
+        audio.play();
 
-    isPlayingAudio = true;
+        // When the audio has finished playing, resolve the promise
+        audio.onended = function () {
+            resolve();
+        };
+    });
+}
 
-    let audio = document.getElementById('audio');
-    audio.src = URL.createObjectURL(audioBlob);
-    audio.play();
-
-    audio.onended = function () {
-        isPlayingAudio = false;
-        if (audioQueue.length > 0) {
-            playAudio(audioQueue.shift());
-        }
-    };
+async function stopAudioAsync() {
+    return new Promise((resolve, reject) => {
+        let audio = document.getElementById('audio');
+        orionSpeakQueue.slice(0, orionSpeakQueue.length); // Clear the orion speak queue
+        audioQueue.slice(0, audioQueue.length); // Clear the audio queue
+        audio.pause();
+        audio.currentTime = 0;
+        resolve();
+    });
 }
 
 // Function to start recording
@@ -47,8 +49,7 @@ function startVoiceRecording() {
             voiceRecorder = new MediaRecorder(stream);
 
             voiceRecorder.ondataavailable = function (event) {
-                if (event.data)
-                    audioChunks.push(event.data);
+                if (event.data) audioChunks.push(event.data);
             };
 
             voiceRecorder.onstop = function () {
@@ -61,30 +62,20 @@ function startVoiceRecording() {
                 }
 
                 // Get the MIME type of the audio
-                var mimeType = voiceRecorder.mimeType;
+                const mimeType = voiceRecorder.mimeType;
 
                 // Combine the audio chunks into a single Blob
-                var audioBlob = new Blob(audioChunks, {type: mimeType});
+                const audioBlob = new Blob(audioChunks, {type: mimeType});
 
                 // Play a beep sound to indicate that recording has ended.
-                let audio = document.getElementById('audio');
+                const audio = document.getElementById('audio');
                 audio.src = "mic_stop.mp3";
                 audio.play();
 
                 // Send the audio data to the server
-                fetch('/stt', {
-                    method: 'POST',
-                    body: audioBlob,
-                    headers: {
-                        'Content-Type': mimeType,
-                    },
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        addMessageToChat(data.message, []);
-                    })
-                    .catch(error => {
-                        console.error('Error sending audio data:', error);
+                OrionAPI.transcribeAudioAsync(audioBlob)
+                    .then(message => {
+                        addMessageToChatAsync(message, []);
                     });
             };
 
@@ -112,10 +103,12 @@ document.getElementById('send-button').addEventListener('touchstart', function (
     event.preventDefault();
     micHoldTimer = setTimeout(startVoiceRecording, micHoldThreshold);
 });
+
 document.getElementById('send-button').addEventListener('mousedown', function (event) {
     event.preventDefault();
     micHoldTimer = setTimeout(startVoiceRecording, micHoldThreshold);
 });
+
 document.getElementById('send-button').addEventListener('mouseup', function (event) {
     event.preventDefault();
     clearTimeout(micHoldTimer);
@@ -155,7 +148,7 @@ document.getElementById('send-button').addEventListener('mouseup', function (eve
         // Wait for the files to be read
         promise.then((Files) => {
             // Add the message to the chat area
-            addMessageToChat(messageInput, Files);
+            addMessageToChatAsync(messageInput, Files);
             document.getElementById('message-input').value = '';
             document.getElementById('file-input').value = '';
         }).catch((error) => {
@@ -163,6 +156,7 @@ document.getElementById('send-button').addEventListener('mouseup', function (eve
         });
     }
 });
+
 document.getElementById('send-button').addEventListener('touchend', function (event) {
     event.preventDefault();
     clearTimeout(micHoldTimer);
@@ -202,7 +196,7 @@ document.getElementById('send-button').addEventListener('touchend', function (ev
         // Wait for the files to be read
         promise.then((Files) => {
             // Add the message to the chat area
-            addMessageToChat(messageInput, Files);
+            addMessageToChatAsync(messageInput, Files);
             document.getElementById('message-input').value = '';
             document.getElementById('file-input').value = '';
         }).catch((error) => {
@@ -239,36 +233,51 @@ orionEventsSource.addEventListener('message.started', function (event) {
     chatArea.scrollTop = chatArea.scrollHeight;
 });
 
-async function orionSpeakAsync(sentence) {
-    if (!isProcessingOrionSpeak) {
-        isProcessingOrionSpeak = true;
-
-        // Send the sentence to the server for text-to-speech conversion
-        fetch('/orion/speak', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-User-Id': localStorage.getItem('user_id')
-            },
-            body: JSON.stringify({message: sentence})
-        }).then(response => response.blob())
-            .then(blob => {
-                isProcessingOrionSpeak = false;
-                playAudio(blob);
-
-                if (orionSpeakQueue.length > 0) {
-                    orionSpeakAsync(orionSpeakQueue.shift());
-                }
-            }).catch(error => {
-            console.error('Error:', error);
-            alert('Failed to convert message to speech: ' + error);
-        });
-    } else {
-        orionSpeakQueue.push(sentence);
+async function startProcessingAudioQueueAsync() {
+    shouldProcessAudioQueue = true;
+    while (true) {
+        if (shouldProcessAudioQueue !== false) {
+            if (audioQueue.length > 0) {
+                const audioBlob = audioQueue.shift();
+                await playAudioAsync(audioBlob);
+            } else {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        } else {
+            break;
+        }
     }
 }
 
-orionEventsSource.addEventListener('message.delta', function (event) {
+// Asynchronously processes the Orion speak queue as they are added in a loop foreach sentence
+async function startProcessingOrionSpeakQueueAsync() {
+    shouldProcessOrionSpeakQueue = true;
+    while (true) {
+        if (shouldProcessOrionSpeakQueue !== false) {
+            if (orionSpeakQueue.length > 0) {
+                const sentence = orionSpeakQueue.shift();
+
+                // Generate the audio for the sentence
+                const audioBlob = await OrionAPI.speakAsync(sentence);
+
+                // Add the audio to the audio queue
+                audioQueue.push(audioBlob);
+
+            } else {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        } else {
+            break;
+        }
+    }
+}
+
+async function orionSpeakAsync(sentence) {
+    // Add the sentence to the queue
+    orionSpeakQueue.push(sentence);
+}
+
+orionEventsSource.addEventListener('message.delta', async function (event) {
     // This event is triggered when Orion sends a delta of the message being composed
 
     // We want to append the new message to the existing message created by 'message.started'
@@ -285,38 +294,32 @@ orionEventsSource.addEventListener('message.delta', function (event) {
         // Remove the first sentence from the message
         currentMessageBeingComposedForSpeech = currentMessageBeingComposedForSpeech.substring(sentence.length);
 
-        orionSpeakAsync(sentence);
+        await orionSpeakAsync(sentence);
     }
 
-    // Fetch markdown from the server
-    fetch('/markdown',
-        {
-            method: 'POST',
-            headers:
-                {
-                    'Content-Type': 'application/json'
-                },
-            body: JSON.stringify({message: currentMessageBeingComposed})
-        })
-        .then(response => response.json())
-        .then(jmarkdown => {
+    // Render the markdown into html
+    await OrionAPI.renderMarkdownAsync(currentMessageBeingComposed)
+        .then(markdown => {
             // Get the chat area
             const chatArea = document.getElementById('chat-area');
 
             // Get the last message in the chat area
-            const newMessage = chatArea.lastChild;
+            const lastElement = chatArea.querySelector('.orion-message-container:last-child')
 
-            // Append the new message to the existing message
-            const messageDiv = newMessage.querySelector('.message');
+            if (lastElement) {
+                // Append the new message to the existing message
+                const lastMessageElement = lastElement.querySelector('.message');
 
-            messageDiv.innerHTML = jmarkdown.message;
+                if (lastMessageElement) {
+                    // Update the message with the new message
+                    lastMessageElement.innerHTML = markdown;
 
-            // scroll to the bottom of the chat area
-            chatArea.scrollTop = chatArea.scrollHeight;
-        }).catch(error => {
-        console.error('Error:', error);
-        alert('Failed to convert message to markdown: ' + error);
-    });
+                    // scroll to the bottom of the chat area
+                    chatArea.scrollTop = chatArea.scrollHeight;
+                }
+            }
+
+        });
 });
 
 orionEventsSource.addEventListener('message.in_progress', function (event) {
@@ -340,12 +343,12 @@ orionEventsSource.addEventListener('message.in_progress', function (event) {
 
 });
 
-orionEventsSource.addEventListener('message.completed', function (event) {
+orionEventsSource.addEventListener('message.completed', async function (event) {
     // This event is triggered when Orion completes composing a message
 
     // Play the final sentence if it exists
     if (currentMessageBeingComposedForSpeech.length > 0) {
-        orionSpeakAsync(currentMessageBeingComposedForSpeech);
+        await orionSpeakAsync(currentMessageBeingComposedForSpeech);
     }
 
     currentMessageBeingComposedForSpeech = '';
@@ -355,8 +358,8 @@ orionEventsSource.addEventListener('message.completed', function (event) {
     // Get the chat area
     const chatArea = document.getElementById('chat-area');
 
-    // Get the last message in the chat area
-    const lastMessage = chatArea.querySelector('.orion-message-container:last-child')
+    // Get the last message of class 'orion-message-container'
+    const lastMessage = chatArea.querySelector('.orion-message-container:last-child');
 
     // convert the message to markdown
     let orionText = currentMessageBeingComposed;
@@ -374,34 +377,31 @@ orionEventsSource.addEventListener('message.completed', function (event) {
     // Clear the annotations
     currentAnnotations = [];
 
-    //Fetch markdown from the server
-    fetch('/markdown',
-        {
-            method: 'POST',
-            headers:
-                {
-                    'Content-Type': 'application/json'
-                },
-            body: JSON.stringify({message: orionText})
-        })
-        .then(response => response.json())
-        .then(jmarkdown => {
+    // If the message is empty, do not proceed with rendering markdown
+    if (orionText.trim() === '') {
+        // Remove the in-progress message
+        const messageStatus = lastMessage.querySelector('.message-status')
+        if (messageStatus) {
+            messageStatus.remove();
+        }
+        return;
+    }
+
+    // Render markdown into html
+    await OrionAPI.renderMarkdownAsync(orionText)
+        .then(markdown => {
             // Remove the in-progress message
             lastMessage.querySelector('.message-status').remove();
 
             // Update the message with the final message
-            lastMessage.querySelector('.message').innerHTML = jmarkdown.message;
+            lastMessage.querySelector('.message').innerHTML = markdown;
 
             // Process the new message for code blocks and add copy buttons
             processCodeBlocks(lastMessage);
 
             // Scroll to the bottom of the chat area
             chatArea.scrollTop = chatArea.scrollHeight;
-
-        }).catch(error => {
-        console.error('Error:', error);
-        alert('Failed to convert message to markdown: ' + error);
-    });
+        });
 });
 
 orionEventsSource.addEventListener('message.annotation.created', function (event) {
@@ -413,12 +413,8 @@ orionEventsSource.addEventListener('message.annotation.created', function (event
 
 orionEventsSource.addEventListener('upload.file.requested', function (event) {
     // This event is triggered when Orion requests a file upload from the user
-
-    // Get the chat area
-    const chatArea = document.getElementById('chat-area');
-
     const jdata = JSON.parse(event.data);
-    const filePath = jdata.file_path;
+    const filePath = jdata['file_path'];
 
     console.log('Requested upload file:', filePath);
 });
@@ -437,35 +433,6 @@ document.addEventListener('touchstart', function () {
     // Remove the event listener so that the audio is only played once
     document.removeEventListener('touchstart', arguments.callee);
 });
-
-async function playAudioFilesSequentially(index = 0) {
-    const userID = localStorage.getItem('user_id');
-
-    const speechEndpoint = '/speech/' + index;
-
-    // Fetch the audio files from the server
-    await fetch(speechEndpoint, {
-        method: 'GET',
-        headers: {
-            'X-User-Id': userID
-        }
-    }).then(response => response.blob())
-        .then(blob => {
-                let audio = document.getElementById('audio');
-                audio.src = URL.createObjectURL(blob);
-                audio.preload = 'none';
-                audio.play();
-
-                // When the audio has finished playing, play the next audio file
-                audio.onended = function () {
-                    playAudioFilesSequentially(index + 1);
-                };
-            }
-        ).catch(error => {
-            console.error('Error:', error);
-            alert('Failed to play audio: ' + error);
-        });
-}
 
 // Add event listener to text input to send message on pressing enter
 document.getElementById('message-input').addEventListener('keypress', function (e) {
@@ -505,7 +472,7 @@ document.getElementById('message-input').addEventListener('keypress', function (
             // Wait for the files to be read
             promise.then((Files) => {
                 // Add the message to the chat area
-                addMessageToChat(messageInput, Files).then(() => {
+                addMessageToChatAsync(messageInput, Files).then(() => {
                     document.getElementById('message-input').value = '';
                     document.getElementById('file-input').value = '';
                 });
@@ -522,6 +489,13 @@ document.getElementById('new-chat-button').addEventListener('click', function ()
 });
 
 document.addEventListener('DOMContentLoaded', function () {
+
+    // Start processing the Orion speak queue
+    startProcessingOrionSpeakQueueAsync();
+
+    // Start processing the audio queue
+    startProcessingAudioQueueAsync();
+
     // Get the user id from local storage
     const userID = localStorage.getItem('user_id');
     if (userID === null) {
@@ -534,14 +508,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Get the chat area
     const chatArea = document.getElementById('chat-area');
 
-    // Fetch the chat messages from the server
-    fetch('/chat_history?markdown=true', {
-        method: 'GET',
-        headers: {
-            'X-User-Id': userID,
-            'Content-Type': 'text/plain charset=utf-8'
-        }
-    }).then(response => response.json())
+    // Get the chat history from the server
+    OrionAPI.getChatHistoryAsync()
         .then(messages => {
             let newMessage;
             const chatArea = document.getElementById('chat-area');
@@ -570,15 +538,29 @@ document.addEventListener('DOMContentLoaded', function () {
             // Scroll to the bottom of the chat area
             chatArea.scrollTop = chatArea.scrollHeight;
 
-        }).catch(error => {
-        console.error('Error:', error);
-        alert('Failed to fetch chat history: ' + error);
-    });
+        });
 });
 
-// Function to process the newly added message for code blocks and add copy buttons
-function processCodeBlocks(newMessage) {
-    const codeBlocks = newMessage.querySelectorAll('pre code');
+// Function to process when the user leaves the page
+window.onbeforeunload = function () {
+    // Stop processing the Orion speak queue
+    shouldProcessOrionSpeakQueue = false;
+
+    // Stop processing the audio queue
+    shouldProcessAudioQueue = false;
+}
+
+/**
+ * Processes the code blocks within a message Element and adds copy buttons to each code block and highlights the code.
+ * This modifies the Element in place and therefore does not represent the original texts.  It should no longer
+ * be used as if it were the original text after this function is called. (it is for display only).
+ * Original texts can be retrieved from the server if needed.
+ *
+ * @param {HTMLDivElement} messageElement The Element to process. This is a div element containing the message
+ * (.orion-message-container, .user-message-container).
+ */
+function processCodeBlocks(messageElement) {
+    const codeBlocks = messageElement.querySelectorAll('pre code');
     if (codeBlocks.length > 0) {
         codeBlocks.forEach(codeBlock => {
             // Add copy button to each code block
@@ -599,17 +581,22 @@ function processCodeBlocks(newMessage) {
     }
 
     // Highlight all code elements within the newMessage
-    const codeElements = newMessage.querySelectorAll('code');
+    const codeElements = messageElement.querySelectorAll('code');
     if (codeElements.length > 0) {
-        codeElements.forEach(function (code) {
-            hljs.highlightElement(code);
+        codeElements.forEach(function (codeElement) {
+            hljs.highlightElement(codeElement);
         });
     } else {
         console.warn('No <code> elements found within the new message for highlighting.');
     }
 }
 
-// Function to create html element for an orion message
+/**
+ * Creates a new message for Orion (but does not add it to the chat area).
+ * This is used internally by the addMessageToChatAsync function.
+ * @param {string} message The message to display.
+ * @returns {HTMLDivElement} The message container.
+ */
 function createOrionMessage(message) {
     // Create a new div element for the message-container
     const messageContainer = document.createElement('div');
@@ -633,7 +620,12 @@ function createOrionMessage(message) {
     return messageContainer;
 }
 
-// Function to create html element for a user message
+/**
+ * Creates a new message for the user (but does not add it to the chat area).
+ * This is used internally by the addMessageToChatAsync function.
+ * @param {string} message The message to display.
+ * @returns {HTMLDivElement} The message container.
+ */
 function createUserMessage(message) {
     // Create a new div element for the message-container
     const messageContainer = document.createElement('div');
@@ -657,33 +649,35 @@ function createUserMessage(message) {
     return messageContainer;
 }
 
-// Function to add a message to the chat area
-async function addMessageToChat(message, files) {
+/**
+ * Adds a message to the chat area and sends the message to Orion.
+ * @param {string} message The message to add to the chat area and send to Orion.
+ * @param {FileList} files The files to send with the message.
+ */
+async function addMessageToChatAsync(message, files) {
     if (message.trim() !== '') {
+
+        // Stop any audio that is currently playing
+        await stopAudioAsync();
+
+        // Remove the in-progress message if it exists
         const chatArea = document.getElementById('chat-area');
+        const lastMessage = chatArea.querySelector('.orion-message-container:last-child');
+        if (lastMessage) {
+            const messageStatus = lastMessage.querySelector('.message-status');
+            if (messageStatus) {
+                messageStatus.remove();
+            }
+        }
 
-        // create json object for the message
-        const jmessage = {
-            message: message,
-        };
-
-        //Fetch markdown from the server
-        await fetch('/markdown', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(jmessage)
-        })
-            .then(response => response.json())
-            .then(jmarkdown => {
-                const chatArea = document.getElementById('chat-area');
-
-                // get message from markdown
-                const markdown = jmarkdown.message;
+        // Render the message as markdown and add it to the chat area
+        const renderMarkdownPromise = OrionAPI.renderMarkdownAsync(message)
+            .then(markdown => {
 
                 // Create a new message for the user
                 const newMessage = createUserMessage(markdown);
+
+                const chatArea = document.getElementById('chat-area');
 
                 // Add the new message to the chat area
                 chatArea.appendChild(newMessage);
@@ -696,30 +690,10 @@ async function addMessageToChat(message, files) {
                 alert('Failed to convert message to markdown: ' + error);
             });
 
-        // Create a body that contains the message and the files
-        const body = {
-            message: message,
-            files: [...files] // Convert the FileList to an array
-        };
+        // Send the message to Orion
+        await OrionAPI.sendMessageAsync(message, files);
 
-        // Send the message to the server
-        await fetch('/send_message?markdown=true', {
-            method: 'POST',
-            headers: {
-                'X-User-Id': localStorage.getItem('user_id'),
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        }).then(response => {
-            if (response.ok) {
-                console.log('Message sent successfully');
-            } else {
-                console.error('Failed to send message:', response.statusText);
-                alert('Failed to send message: ' + response.statusText);
-            }
-        }).catch(error => {
-            console.error('Error:', error);
-            alert('Failed to send message: ' + error);
-        });
+        // Wait for the message to be rendered as markdown
+        await renderMarkdownPromise;
     }
 }

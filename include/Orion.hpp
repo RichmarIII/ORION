@@ -262,7 +262,8 @@ namespace ORION
         /// @param  INDEX The index of the message
         /// @param  AUDIO_FORMAT The audio format to use
         /// @return the audio stream
-        pplx::task<concurrency::streams::istream> SpeakSingleAsync(const std::string& Message, const uint8_t INDEX, const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default) const;
+        pplx::task<concurrency::streams::istream>
+        SpeakSingleAsync(const std::string& Message, const uint8_t INDEX, const ETTSAudioFormat AUDIO_FORMAT = ETTSAudioFormat::Default) const;
 
         /// @brief  Split the message into multiple parts if it is too long asynchronously. This is a helper function that is called by the SpeakAsync
         /// function.
@@ -284,6 +285,7 @@ namespace ORION
         std::string                              m_CurrentThreadID;
         EOrionVoice                              m_CurrentVoice;
         EOrionIntelligence                       m_CurrentIntelligence;
+        std::string                              m_CurrentAssistantRunID;
 
         /// @brief The client used to communicate with the OpenAI API
         std::unique_ptr<web::http::client::http_client> m_OpenAIClient;

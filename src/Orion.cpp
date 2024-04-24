@@ -225,6 +225,22 @@ void Orion::LoadAPIKeys()
 
 pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::json::array& Files)
 {
+    // Cancel current assistant run
+    if (!m_CurrentAssistantRunID.empty())
+    {
+        web::http::http_request CancelRunRequest(web::http::methods::POST);
+        CancelRunRequest.set_request_uri(U("threads/" + m_CurrentThreadID + "/runs/" + m_CurrentAssistantRunID + "/cancel"));
+        CancelRunRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+        CancelRunRequest.headers().add("OpenAI-Beta", "assistants=v2");
+
+        if (const auto CANCEL_RUN_RESPONSE = m_OpenAIClient->request(CancelRunRequest).get(); CANCEL_RUN_RESPONSE.status_code() != web::http::status_codes::OK)
+        {
+            std::cout << __func__ << ": Failed to cancel the current assistant run.: " << CANCEL_RUN_RESPONSE.to_string() << std::endl;
+        }
+
+        m_CurrentAssistantRunID.clear();
+    }
+
     // Upload the files
     auto JFiles = web::json::value::array();
     for (const auto& File : Files)
@@ -303,7 +319,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
     web::json::value CreateMessageBody = web::json::value::object();
     CreateMessageBody["content"]       = web::json::value::string(Message);
     CreateMessageBody["role"]          = web::json::value::string("user");
-    //CreateMessageBody["file_ids"]      = JFiles;
+    // CreateMessageBody["file_ids"]      = JFiles;
     CreateMessageRequest.set_body(CreateMessageBody);
 
     return m_OpenAIClient->request(CreateMessageRequest)
@@ -369,10 +385,24 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                                         // Break out of the loop
                                         break;
                                     }
+                                    else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_RUN_CREATED)
+                                    {
+                                        web::json::value JMessage = web::json::value::parse(EventData);
+                                        m_CurrentAssistantRunID   = JMessage.at("id").as_string();
+                                    }
+                                    else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_RUN_COMPLETED)
+                                    {
+                                        web::json::value JMessage = web::json::value::parse(EventData);
+                                        m_CurrentAssistantRunID.clear();
+
+                                        // Format an SSE event for the SSEOrionEventNames::RUN_COMPLETED event.
+                                        // No data is needed for this event.
+                                        m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_COMPLETED, web::json::value::object());
+                                    }
                                     else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_MESSAGE_COMPLETED)
                                     {
                                         // Format an SSE event for the SSEOrionEventNames::MESSAGE_COMPLETED event.
-                                        // No data is needed for this event.
+
                                         m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_COMPLETED, web::json::value::object());
                                     }
                                     else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_MESSAGE_DELTA)
@@ -826,9 +856,9 @@ pplx::task<concurrency::streams::istream> Orion::SpeakAsync(const std::string& M
                         // Execute the command
                         std::system(FfmpegCommand.c_str());
 
-                        auto AudioFileStream = concurrency::streams::fstream::open_istream(ABS_OUTPUT_FILE_PATH.string(), std::ios::in | std::ios::binary);
+                        const auto AUDIO_FILE_STREAM = concurrency::streams::fstream::open_istream(ABS_OUTPUT_FILE_PATH.string(), std::ios::in | std::ios::binary);
 
-                        return AudioFileStream;
+                        return AUDIO_FILE_STREAM;
                     });
         });
 }
