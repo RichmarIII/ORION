@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 
 # Set the cmake toolchain file to use
-set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+#set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
 
 project(ORION VERSION 1.0 DESCRIPTION "Operational Reasoning and Intelligence Optimized Nexus")
 
@@ -51,7 +51,7 @@ set(SOURCES
         src/tools/NavigateLinkFunctionTool.cpp
         src/tools/DownloadHTTPFileFunctionTool.cpp
         src/tools/CreateAutonomousActionPlanFunctionTool.cpp
-        src/tools/UploadFileToAssistantFunctionTool.cpp
+        src/tools/RequestFileUploadFromUserFunctionTool.cpp
         src/tools/RememberKnowledgeFunctionTool.cpp
         src/tools/RecallKnowledgeFunctionTool.cpp
         src/tools/UpdateKnowledgeFunctionTool.cpp
@@ -84,7 +84,7 @@ set(HEADERS
         include/tools/TakeScreenshotFunctionTool.hpp
         include/tools/WebSearchFunctionTool.hpp
         include/tools/CreateAutonomousActionPlanFunctionTool.hpp
-        include/tools/UploadFileToAssistantFunctionTool.hpp
+        include/tools/RequestFileUploadFromUserFunctionTool.hpp
         include/tools/RememberKnowledgeFunctionTool.hpp
         include/tools/RecallKnowledgeFunctionTool.hpp
         include/tools/UpdateKnowledgeFunctionTool.hpp
@@ -96,23 +96,75 @@ set(HEADERS
 add_executable(ORION ${HEADERS} ${SOURCES})
 
 # If you need to link against libraries, do so here
-find_package(cpprestsdk CONFIG REQUIRED)
-find_package(cmark CONFIG REQUIRED)
-find_path(SQLITE_MODERN_CPP_INCLUDE_DIRS "sqlite_modern_cpp.h")
-find_package(unofficial-sqlite3 CONFIG REQUIRED)
 
 include(FetchContent)
+FetchContent_Declare(myhtml GIT_REPOSITORY git@github.com:lexborisov/myhtml.git)
+FetchContent_Declare(cpprestsdk GIT_REPOSITORY git@github.com:microsoft/cpprestsdk.git)
+FetchContent_Declare(cmark GIT_REPOSITORY git@github.com:commonmark/cmark.git)
 FetchContent_Declare(
+        sqlite3
+        URL https://www.sqlite.org/src/zip/sqlite.zip?r=release
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_Declare(sqlite_modern_cpp GIT_REPOSITORY git@github.com:SqliteModernCpp/sqlite_modern_cpp.git)
+
+FetchContent_GetProperties(sqlite3)
+if (NOT sqlite3_POPULATED)
+    FetchContent_Populate(sqlite3)
+    message(STATUS "sqlite3_SOURCE_DIR: ${sqlite3_SOURCE_DIR}")
+    message(STATUS "sqlite3_BINARY_DIR: ${sqlite3_BINARY_DIR}")
+    add_custom_command(
+            OUTPUT ${sqlite3_BINARY_DIR}/install/lib/libsqlite3.so
+            COMMAND cd ${sqlite3_BINARY_DIR}
+            COMMAND ${sqlite3_SOURCE_DIR}/configure --prefix=${sqlite3_BINARY_DIR}/install
+            COMMAND make
+            COMMAND make sqlite3.c
+            COMMAND make install
+            WORKING_DIRECTORY ${sqlite3_SOURCE_DIR}
+            COMMENT "Building sqlite3..."
+    )
+endif ()
+
+add_custom_target(sqlite3_build ALL DEPENDS ${sqlite3_BINARY_DIR}/install/lib/libsqlite3.so)
+add_dependencies(ORION sqlite3_build)
+
+FetchContent_MakeAvailable(
         myhtml
-        GIT_REPOSITORY git@github.com:lexborisov/myhtml.git
+        cpprestsdk
+        cmark
+        sqlite_modern_cpp
 )
 
-FetchContent_MakeAvailable(myhtml)
+get_target_property(MYHTML_SOURCE_DIR myhtml SOURCE_DIR)
+set(MYHTML_INCLUDE_DIR ${MYHTML_SOURCE_DIR}/include)
+get_target_property(CPPRESTSDK_SOURCE_DIR cpprest SOURCE_DIR)
+set(CPPRESTSDK_INCLUDE_DIR ${CPPRESTSDK_SOURCE_DIR}/../include)
+#disable warnings as errors for cpprestsdk
+target_compile_options(cpprest PRIVATE -Wno-error)
+get_target_property(CMARK_SOURCE_DIR cmark SOURCE_DIR)
+set(CMARK_INCLUDE_DIR ${CMARK_SOURCE_DIR}/src)
+set(SQLITE3_INCLUDE_DIR ${sqlite3_BINARY_DIR}/install/include)
+set(SQLITE3_LIBRARY ${sqlite3_BINARY_DIR}/install/lib/libsqlite3.so)
+set(SQLITE_MODERN_CPP_SOURCE_DIR ${sqlite_modern_cpp_SOURCE_DIR})
+set(SQLITE_MODERN_CPP_INCLUDE_DIR ${SQLITE_MODERN_CPP_SOURCE_DIR}/hdr)
 
-# Include directorys for header files
-target_include_directories(ORION PRIVATE include ${SQLITE_MODERN_CPP_INCLUDE_DIRS} ${myhtml_SOURCE_DIR}/include)
 
-target_link_libraries(ORION PRIVATE myhtml cpprestsdk::cpprest cpprestsdk::cpprestsdk_zlib_internal cpprestsdk::cpprestsdk_boost_internal cpprestsdk::cpprestsdk_openssl_internal cmark::cmark_static unofficial::sqlite3::sqlite3)
+# Include directories for header files
+target_include_directories(ORION PRIVATE
+        include
+        ${MYHTML_INCLUDE_DIR}
+        ${CPPRESTSDK_INCLUDE_DIR}
+        ${CMARK_INCLUDE_DIR}
+        ${SQLITE3_INCLUDE_DIR}
+        ${SQLITE_MODERN_CPP_INCLUDE_DIR}
+)
+
+target_link_libraries(ORION PRIVATE
+        myhtml
+        cpprest
+        cmark
+        ${SQLITE3_LIBRARY}
+)
 
 # Copy the files to the executable directory recursively
 add_custom_command(TARGET ORION POST_BUILD

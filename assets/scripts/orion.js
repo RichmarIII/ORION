@@ -211,7 +211,7 @@ document.getElementById('send-button').addEventListener('mouseleave', function (
 });
 
 // Listen for server-sent events
-const orionEventsSource = new EventSource('/orion_events');
+const orionEventsSource = new EventSource('/orion/events');
 orionEventsSource.addEventListener('message.started', function (event) {
     // This event is triggered when Orion starts to compose a message
 
@@ -258,10 +258,10 @@ async function startProcessingOrionSpeakQueueAsync() {
                 const sentence = orionSpeakQueue.shift();
 
                 // Generate the audio for the sentence
-                const audioBlob = await OrionAPI.speakAsync(sentence);
+                //const audioBlob = await OrionAPI.speakAsync(sentence);
 
                 // Add the audio to the audio queue
-                audioQueue.push(audioBlob);
+                //audioQueue.push(audioBlob);
 
             } else {
                 await new Promise(resolve => setTimeout(resolve, 100));
@@ -368,7 +368,7 @@ orionEventsSource.addEventListener('message.completed', async function (event) {
 
     // Loop through the annotations and replace the placeholders in the message with the actual values
     currentAnnotations.forEach(annotation => {
-        orionText = orionText.replace(annotation.text_to_replace, annotation.file_name);
+        orionText = orionText.replace(annotation.text_to_replace, annotation.url);
     });
 
     // log annotations

@@ -3,26 +3,40 @@
 
 using namespace ORION;
 
+using FunctionReturnResults = FunctionTool::Statics::FunctionResults;
+
 std::string CreateAutonomousActionPlanFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
     try
     {
-        if (!Parameters.has_field("plan_steps"))
+        constexpr std::string_view NAME_PLAN_STEPS = "plan_steps";
+
+        if (!Parameters.has_field(NAME_PLAN_STEPS.data()))
         {
-            std::cerr << "The plan_steps are required, try again assistant." << std::endl;
-            return std::string(R"({"message": "The plan_steps are required, try again assistant.)");
+            std::cout << __func__ << ": The plan_steps are required" << std::endl;
+
+            auto Response                                                   = web::json::value::object();
+            Response[FunctionReturnResults::NAME_ORION_INSTRUCTIONS.data()] = web::json::value::string("The plan_steps are required");
         }
 
-        // Wants to create an autonomous plan of action
-        const std::string PLAN_STEPS = Parameters.at("plan_steps").as_string();
+        auto Response = web::json::value::object();
+        Response[FunctionReturnResults::NAME_ORION_INSTRUCTIONS.data()] =
+            web::json::value::string("The plan is complete, now follow the 'plan'.  If the conditions or context change, you may need to create a new plan.");
 
-        std::cout << std::endl << "Created an autonomous plan of action with the following steps: " << PLAN_STEPS << std::endl;
+        auto PlanSteps    = web::json::value::object();
+        PlanSteps["plan"] = Parameters.at(NAME_PLAN_STEPS.data());
 
-        return std::string(R"({"message": "Created an autonomous plan of action with the following steps: )") + PLAN_STEPS + R"("})";
+        Response[FunctionReturnResults::NAME_RESULT.data()] = PlanSteps;
+
+        return Response.serialize();
     }
     catch (const std::exception& Exception)
     {
-        std::cerr << "Failed to change the voice: " << Exception.what() << std::endl;
-        return std::string(R"({"message": "Failed to change the voice: )") + Exception.what() + R"("})";
+        std::cout << "Failed to change the voice: " << Exception.what() << std::endl;
+
+        auto ErrorObject                                       = web::json::value::object();
+        ErrorObject[FunctionReturnResults::NAME_RESULT.data()] = web::json::value::string("Error: " + std::string(Exception.what()));
+
+        return ErrorObject.serialize();
     }
 }

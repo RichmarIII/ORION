@@ -1,29 +1,34 @@
-#include "tools/UploadFileToAssistantFunctionTool.hpp"
 #include "Orion.hpp"
 #include "OrionWebServer.hpp"
+#include "tools/RequestFileUploadFromUserFunctionTool.hpp"
 
 #include <filesystem>
 
 using namespace ORION;
 
-std::string UploadFileToAssistantFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
+using FunctionResults = FunctionTool::Statics::FunctionResults;
+
+std::string RequestFileUploadFromUserFunctionTool::Execute(Orion& Orion, const web::json::value& Parameters)
 {
-    std::cout << std::endl << "UploadFileToAssistantFunctionTool::Execute: " << Parameters.serialize() << std::endl;
+    std::cout << std::endl << __func__ << ": " << Parameters.serialize() << std::endl;
 
     // Get the file path from the parameters
     std::string FilePath = Parameters.has_field(U("file_path")) ? Parameters.at(U("file_path")).as_string() : "";
 
     if (FilePath.empty())
     {
-        web::json::value ErrorObject = web::json::value::object();
-        ErrorObject[U("error")]      = web::json::value::string(U("File path is empty."));
+        web::json::value ErrorObject                     = web::json::value::object();
+        ErrorObject[FunctionResults::NAME_RESULT.data()] = web::json::value::string(U("File path is empty."));
         return ErrorObject.serialize();
     }
 
     if (!std::filesystem::exists(FilePath) || !std::filesystem::is_regular_file(FilePath))
     {
-        web::json::value ErrorObject = web::json::value::object();
-        ErrorObject[U("error")]      = web::json::value::string(U("File path is not a file or doesn't exist."));
+        web::json::value ErrorObject                     = web::json::value::object();
+        ErrorObject[FunctionResults::NAME_RESULT.data()] = web::json::value::string(U("File path is not a file or doesn't exist."));
+        ErrorObject[FunctionResults::NAME_ORION_INSTRUCTIONS.data()] =
+            web::json::value::string(U("Please provide a valid file path to a file that exists on the USER'S computer/device.  Make sure you are NOT trying to specify a path from "
+                                       "YOUR computer/device. Feel free to use the search_filesystem tool or ask the user for the path"));
         return ErrorObject.serialize();
     }
 
@@ -46,9 +51,9 @@ std::string UploadFileToAssistantFunctionTool::Execute(Orion& Orion, const web::
     Orion.GetWebServer().SendServerEvent(U(OrionWebServer::SSEOrionEventNames::UPLOAD_FILE_REQUESTED), EventObject);
 
     // Tell Orion that the user is about to upload a file and to wait for the file to be uploaded.
-    web::json::value ResponseObject = web::json::value::object();
-    ResponseObject[U("content")]    = web::json::value::string(U("The file that is required is: " + FilePath));
-    ResponseObject[U("instructions_for_orion")] =
+    web::json::value ResponseObject                     = web::json::value::object();
+    ResponseObject[FunctionResults::NAME_RESULT.data()] = web::json::value::string(U("The file that is required is: " + FilePath));
+    ResponseObject[FunctionResults::NAME_ORION_INSTRUCTIONS.data()] =
         web::json::value::string(U("The user is about to upload a file in a chat message.  This file is REQUIRED to continue. Wait for the file to "
                                    "be uploaded before continuing with the "
                                    "autonomous action plan or next steps."));

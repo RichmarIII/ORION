@@ -14,11 +14,11 @@
 #include "tools/NavigateLinkFunctionTool.hpp"
 #include "tools/RecallKnowledgeFunctionTool.hpp"
 #include "tools/RememberKnowledgeFunctionTool.hpp"
+#include "tools/RequestFileUploadFromUserFunctionTool.hpp"
 #include "tools/RetrievalTool.hpp"
 #include "tools/SearchFilesystemFunctionTool.hpp"
 #include "tools/TakeScreenshotFunctionTool.hpp"
 #include "tools/UpdateKnowledgeFunctionTool.hpp"
-#include "tools/UploadFileToAssistantFunctionTool.hpp"
 #include "tools/WebSearchFunctionTool.hpp"
 
 #include <cmark.h>
@@ -166,9 +166,13 @@ void OrionWebServer::HandleRequest(const web::http::http_request& Request)
         HandleTranscribeEndpoint(Request);
     }
     // Handle orion_event endpoint
-    else if (PATH == U("/orion_events"))
+    else if (PATH == U("/orion/events"))
     {
         HandleOrionEventsEndpoint(Request);
+    }
+    else if (PATH.find("/orion/files/") != std::string::npos)
+    {
+        HandleOrionFilesEndpoint(Request);
     }
     else
     {
@@ -375,7 +379,7 @@ void OrionWebServer::HandleChatHistoryEndpoint(web::http::http_request Request)
                     auto  Message          = JMessage.at(U("message")).as_string();
                     char* pMarkdown        = cmark_markdown_to_html(Message.c_str(), Message.length(), CMARK_OPT_UNSAFE);
                     JMessage[U("message")] = web::json::value::string(pMarkdown);
-                    JMessage[U("role")]    = web::json::value::string(JMessage.at(U("role")).as_string() == U("user") ? U("user") : U("assistant"));
+                    JMessage[U("role")]    = web::json::value::string(JMessage.at(U("role")).as_string() == U("user") ? U("user") : U("orion"));
                     free(pMarkdown);
                 }
             }
@@ -489,7 +493,7 @@ const Orion& OrionWebServer::InstantiateOrionInstance(const std::string& Existin
     Tools.push_back(std::make_unique<NavigateLinkFunctionTool>());
     Tools.push_back(std::make_unique<DownloadHTTPFileFunctionTool>());
     Tools.push_back(std::make_unique<CreateAutonomousActionPlanFunctionTool>());
-    Tools.push_back(std::make_unique<UploadFileToAssistantFunctionTool>());
+    Tools.push_back(std::make_unique<RequestFileUploadFromUserFunctionTool>());
     Tools.push_back(std::make_unique<RememberKnowledgeFunctionTool>());
     Tools.push_back(std::make_unique<RecallKnowledgeFunctionTool>());
     Tools.push_back(std::make_unique<UpdateKnowledgeFunctionTool>());
@@ -849,6 +853,53 @@ void OrionWebServer::HandleOrionEventsEndpoint(web::http::http_request Request)
         // Send the response
         Request.reply(Response);
     }
+}
+
+void OrionWebServer::HandleOrionFilesEndpoint(web::http::http_request Request) const
+{
+    // Load OpenAI API Key From environment variable or file
+    std::ifstream OpenAIAPIKeyFile { AssetDirectories::ResolveOpenAIKeyFile() };
+    std::string   OpenAIAPIKey { std::istreambuf_iterator<char>(OpenAIAPIKeyFile), std::istreambuf_iterator<char>() };
+    if (OpenAIAPIKey.empty())
+    {
+        // Try to get the openai api key from the environment
+        if (const char* pAPI_KEY = std::getenv("OPENAI_API_KEY"))
+        {
+            OpenAIAPIKey = pAPI_KEY;
+        }
+        if (OpenAIAPIKey.empty())
+        {
+            auto JFileRequestResponse          = web::json::value::object();
+            JFileRequestResponse[U("message")] = web::json::value::string(U("The OpenAI API key was not found."));
+
+            // ReSharper disable once CppExpressionWithoutSideEffects
+            Request.reply(web::http::status_codes::Unauthorized, JFileRequestResponse);
+            return;
+        }
+    }
+
+    // Get the file_id from the request path
+    const auto FILE_ID_RAW = Request.request_uri().path().substr(std::string("/orion/files/").length());
+    const auto FILE_ID     = FILE_ID_RAW.substr(0, FILE_ID_RAW.find_last_of('.'));
+
+    const auto MIME_TYPE = MimeTypes::GetMimeType(FILE_ID_RAW);
+
+    // Create the request to get the file
+    web::http::client::http_client Client(U("https://api.openai.com/v1"));
+    web::http::http_request        FileRequest(web::http::methods::GET);
+    FileRequest.set_request_uri(U("/files/") + FILE_ID + "/content");
+
+    // Add the authorization header
+    FileRequest.headers().add(U("Authorization"), U("Bearer " + OpenAIAPIKey));
+
+    // Send the request
+    Client.request(FileRequest)
+        .then(
+            [this, Request, MIME_TYPE](web::http::http_response FileRequestResponse)
+            {
+                // Forward the response to the client
+                Request.reply(FileRequestResponse.status_code(), FileRequestResponse.body(), MIME_TYPE);
+            });
 }
 
 void OrionWebServer::SendServerEvent(const OrionEventName& Event, const web::json::value& Data)

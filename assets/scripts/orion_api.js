@@ -94,7 +94,7 @@ class OrionAPI {
                 'X-User-Id': localStorage.getItem('user_id')
             }
         }).then(response => response.json())
-            .then(data => data['messages']);
+            .then(data => data);
     }
 
     /**

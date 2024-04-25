@@ -207,6 +207,11 @@ namespace ORION
             return UserIt != m_LoggedInUsers.end() ? UserIt->UserID : "";
         }
 
+        inline std::string GetLocalIPAddress() const
+        {
+            return m_Listener.uri().host();
+        }
+
     protected:
         /// @brief  Dispatches a request to the appropriate handler based on the request method and path
         /// @param  Request The HTTP request
@@ -287,13 +292,22 @@ namespace ORION
         void HandleTranscribeEndpoint(web::http::http_request Request) const;
 
         /**
-         * @brief Handles the /orion_events endpoint. This endpoint is used to subscribe to Orion events.
+         * @brief Handles the /orion/events endpoint. This endpoint is used to subscribe to Orion events.
          *
          * @param Request The HTTP request
-         * @example curl -X GET http://localhost:5000/orion_events
+         * @example curl -X GET http://localhost:5000/orion/events
          * @example Response: Status 200 OK
          */
         void HandleOrionEventsEndpoint(web::http::http_request Request);
+
+        /**
+         * @brief Handles the /orion/files/<file_id> endpoint. This endpoint is used to download files associated with an Orion instance.
+         *
+         * @param Request The HTTP request
+         * @example curl -X GET http://localhost:5000/orion/files/1234.ext
+         * @example Response: The contents of the file specified by the file_id
+         */
+        void HandleOrionFilesEndpoint(web::http::http_request Request) const;
 
         /// @brief  Instantiates a new Orion instance and returns the new instance. If an Orion instance with the given id already exists on
         /// the server A new local Orion instance is created from the data of the existing server instance. If an Orion instance with the given id

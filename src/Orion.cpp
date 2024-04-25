@@ -447,31 +447,19 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
                                                 {
                                                     auto TextToReplace = JAnnotation.at(U("text")).as_string();
                                                     auto JFilePath     = JAnnotation.at(U("file_path"));
-                                                    auto FileID        = JFilePath.at(U("file_id")).as_string();
-                                                    if (!FileID.empty())
+                                                    if (auto FileID = JFilePath.at(U("file_id")).as_string(); !FileID.empty())
                                                     {
-                                                        // Get the file from the file id
-                                                        web::http::http_request GetFileRequest(web::http::methods::GET);
-                                                        GetFileRequest.set_request_uri(U("files/" + FileID));
-                                                        GetFileRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-                                                        GetFileRequest.headers().add("OpenAI-Beta", "assistants=v2");
+                                                        const auto FILE_EXT     = TextToReplace.substr(TextToReplace.find_last_of('.'));
+                                                        const auto DOWNLOAD_URL = +"orion/files/" + FileID + FILE_EXT;
 
-                                                        auto GetFileResponse = m_OpenAIClient->request(GetFileRequest).get();
+                                                        // SSE event for the annotation
+                                                        web::json::value JClientSSEData      = web::json::value::object();
+                                                        JClientSSEData[U("url")]             = web::json::value::string(DOWNLOAD_URL);
+                                                        JClientSSEData[U("text_to_replace")] = web::json::value::string(TextToReplace);
 
-                                                        if (GetFileResponse.status_code() == web::http::status_codes::OK)
-                                                        {
-                                                            auto GetFileResponseJson = GetFileResponse.extract_json().get();
-                                                            auto FileName            = GetFileResponseJson.at(U("filename")).as_string();
+                                                        // Send the message to the client
 
-                                                            // SSE event for the annotation
-                                                            web::json::value JClientSSEData      = web::json::value::object();
-                                                            JClientSSEData[U("file_name")]       = web::json::value::string(FileName);
-                                                            JClientSSEData[U("text_to_replace")] = web::json::value::string(TextToReplace);
-
-                                                            // Send the message to the client
-
-                                                            m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_ANNOTATION_CREATED, JClientSSEData);
-                                                        }
+                                                        m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_ANNOTATION_CREATED, JClientSSEData);
                                                     }
                                                 }
                                             }
