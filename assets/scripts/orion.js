@@ -258,10 +258,10 @@ async function startProcessingOrionSpeakQueueAsync() {
                 const sentence = orionSpeakQueue.shift();
 
                 // Generate the audio for the sentence
-                //const audioBlob = await OrionAPI.speakAsync(sentence);
+                const audioBlob = await OrionAPI.speakAsync(sentence);
 
                 // Add the audio to the audio queue
-                //audioQueue.push(audioBlob);
+                audioQueue.push(audioBlob);
 
             } else {
                 await new Promise(resolve => setTimeout(resolve, 100));

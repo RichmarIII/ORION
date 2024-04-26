@@ -350,7 +350,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
 
                 return m_OpenAIClient->request(CreateRunRequest)
                     .then(
-                        [this](web::http::http_response CreateRunResponse)
+                        [this](const web::http::http_response& CreateRunResponse)
                         {
                             if (CreateRunResponse.status_code() != web::http::status_codes::OK)
                             {
@@ -361,246 +361,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
 
                             // The response is a server-sent event stream that we need to parse and terminates with the "done" event
                             // Keep reading the response stream for new events
-                            concurrency::streams::istream EventStream = CreateRunResponse.body();
-                            std::string                   Line;
-                            std::string                   EventName;
-                            std::string                   EventData;
-                            while (true)
-                            {
-                                concurrency::streams::container_buffer<std::string> LineBuff {};
-                                const auto                                          NUM_CHARS_READ = EventStream.read_line(LineBuff).get();
-                                Line                                                               = LineBuff.collection();
-
-                                if (NUM_CHARS_READ <= 0)
-                                {
-                                    // Log the event
-                                    std::cout << "SSE Event name: " << EventName << std::endl;
-                                    std::cout << "SSEEvent data: " << EventData << std::endl;
-
-                                    // Process the event
-
-                                    // Check if the event is the "done" event
-                                    if (EventName.empty() || EventName == OrionWebServer::SSEOpenAIEventNames::DONE)
-                                    {
-                                        // Break out of the loop
-                                        break;
-                                    }
-                                    else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_RUN_CREATED)
-                                    {
-                                        web::json::value JMessage = web::json::value::parse(EventData);
-                                        m_CurrentAssistantRunID   = JMessage.at("id").as_string();
-                                    }
-                                    else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_RUN_COMPLETED)
-                                    {
-                                        web::json::value JMessage = web::json::value::parse(EventData);
-                                        m_CurrentAssistantRunID.clear();
-
-                                        // Format an SSE event for the SSEOrionEventNames::RUN_COMPLETED event.
-                                        // No data is needed for this event.
-                                        m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_COMPLETED, web::json::value::object());
-                                    }
-                                    else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_MESSAGE_COMPLETED)
-                                    {
-                                        // Format an SSE event for the SSEOrionEventNames::MESSAGE_COMPLETED event.
-
-                                        m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_COMPLETED, web::json::value::object());
-                                    }
-                                    else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_MESSAGE_DELTA)
-                                    {
-                                        // Format an SSE event for the SSEOrionEventNames::MESSAGE_DELTA event.
-                                        // The data is the message from the assistant.
-
-                                        // First Validate the JSON
-                                        web::json::value JMessage = web::json::value::parse(EventData);
-
-                                        // Perform checks to ensure the message is valid
-                                        if (!JMessage.has_field(U("delta")) || !JMessage.at(U("delta")).has_field(U("content")))
-                                        {
-                                            std::cout << U(__func__) << ":" << __LINE__ << U(": Unexpected message format.") << std::endl;
-                                            throw std::runtime_error("Unexpected message format.");
-                                        }
-
-                                        auto JMessageContentArray = JMessage.at(U("delta")).at(U("content")).as_array();
-                                        for (const auto& JContentItem : JMessageContentArray)
-                                        {
-                                            // Check if the content item is a text item
-                                            if (JContentItem.has_field(U("text")))
-                                            {
-                                                auto JTextContent      = JContentItem.at(U("text"));
-                                                auto TextContentString = JTextContent.has_field(U("value")) ? JTextContent.at(U("value")).as_string() : "";
-
-                                                auto JAnnotations =
-                                                    JTextContent.has_field(U("annotations")) ? JTextContent.at(U("annotations")).as_array() : web::json::value::array().as_array();
-
-                                                if (!TextContentString.empty())
-                                                {
-                                                    // Get the message from the assistant
-                                                    web::json::value JClientSSEData = web::json::value::object();
-                                                    JClientSSEData[U("message")]    = web::json::value::string(TextContentString);
-
-                                                    // Send the message to the client
-                                                    m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_DELTA, JClientSSEData);
-                                                }
-
-                                                // Gather the annotations
-                                                for (const auto& JAnnotation : JAnnotations)
-                                                {
-                                                    auto TextToReplace = JAnnotation.at(U("text")).as_string();
-                                                    auto JFilePath     = JAnnotation.at(U("file_path"));
-                                                    if (auto FileID = JFilePath.at(U("file_id")).as_string(); !FileID.empty())
-                                                    {
-                                                        const auto FILE_EXT     = TextToReplace.substr(TextToReplace.find_last_of('.'));
-                                                        const auto DOWNLOAD_URL = +"orion/files/" + FileID + FILE_EXT;
-
-                                                        // SSE event for the annotation
-                                                        web::json::value JClientSSEData      = web::json::value::object();
-                                                        JClientSSEData[U("url")]             = web::json::value::string(DOWNLOAD_URL);
-                                                        JClientSSEData[U("text_to_replace")] = web::json::value::string(TextToReplace);
-
-                                                        // Send the message to the client
-
-                                                        m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_ANNOTATION_CREATED, JClientSSEData);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_MESSAGE_CREATED)
-                                    {
-                                        // Format an SSE event for the SSEOrionEventNames::MESSAGE_CREATED event.
-                                        // No data is needed for this event.
-
-                                        // Send the message to the client
-                                        m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_STARTED, {});
-                                    }
-                                    else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_MESSAGE_IN_PROGRESS)
-                                    {
-                                        // Format an SSE event for the SSEOrionEventNames::RUN_COMPLETED event.
-                                        // No data is needed for this event.
-
-                                        // Send the message to the client
-                                        m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_IN_PROGRESS, {});
-                                    }
-                                    else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_RUN_REQUIRES_ACTION)
-                                    {
-                                        // Parse the data
-                                        web::json::value JRun = web::json::value::parse(EventData);
-
-                                        auto JRequiredAction = JRun.at("required_action");
-
-                                        if (JRequiredAction.at("type").as_string() == "submit_tool_outputs")
-                                        {
-                                            auto JSumbitToolOutputs = JRequiredAction.at("submit_tool_outputs");
-                                            auto JToolCalls         = JSumbitToolOutputs.at("tool_calls").as_array();
-
-                                            // Create responses for each tool call
-                                            auto ToolCallOutputs = web::json::value::array();
-
-                                            for (auto& JToolCall : JToolCalls)
-                                            {
-                                                if (JToolCall.at("type").as_string() == "function")
-                                                {
-                                                    // Get the tool call
-                                                    auto       JFunctionToolCall = JToolCall.at("function");
-                                                    const auto TOOL_NAME         = JFunctionToolCall.at("name").as_string();
-                                                    const auto TOOL_ARGS         = web::json::value::parse(JFunctionToolCall.at("arguments").as_string());
-
-                                                    auto ToolIt =
-                                                        std::find_if(m_Tools.begin(), m_Tools.end(), [TOOL_NAME](const auto& Tool) { return Tool->GetName() == TOOL_NAME; });
-
-                                                    if (ToolIt != m_Tools.end())
-                                                    {
-                                                        // Get the tool
-                                                        auto pFunctionTool = dynamic_cast<FunctionTool*>(ToolIt->get());
-                                                        if (!pFunctionTool)
-                                                        {
-                                                            std::cout << __func__ << ": Tool is not a function tool: " << TOOL_NAME << std::endl;
-                                                            continue;
-                                                        }
-
-                                                        // Get the tool call outputs
-                                                        auto JFunctionOutputs = pFunctionTool->Execute(*this, TOOL_ARGS);
-
-                                                        // Create the tool call outputs
-                                                        auto JOutput            = web::json::value::object();
-                                                        JOutput["tool_call_id"] = JToolCall.at("id");
-                                                        JOutput["output"]       = web::json::value::string(JFunctionOutputs);
-
-                                                        // Add the tool call outputs to the responses
-                                                        ToolCallOutputs[ToolCallOutputs.size()] = JOutput;
-                                                    }
-                                                    else
-                                                    {
-                                                        // Default to an empty output
-                                                        auto JOutput            = web::json::value::object();
-                                                        JOutput["tool_call_id"] = JToolCall.at("id");
-                                                        JOutput["output"]       = web::json::value::string("Tool doesn't exist.  Stop hallucinating.");
-
-                                                        // Add the tool call outputs to the responses
-                                                        ToolCallOutputs[ToolCallOutputs.size()] = JOutput;
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    // Default to an empty output
-                                                    auto JOutput            = web::json::value::object();
-                                                    JOutput["tool_call_id"] = JToolCall.at("id");
-                                                    JOutput["output"]       = web::json::value::string("");
-
-                                                    // Add the tool call outputs to the responses
-                                                    ToolCallOutputs[ToolCallOutputs.size()] = JOutput;
-                                                }
-                                            }
-
-                                            // Submit the tool call results
-                                            web::http::http_request SubmitToolOutputsRequest(web::http::methods::POST);
-
-                                            // Set the request uri
-                                            SubmitToolOutputsRequest.set_request_uri(
-                                                U("threads/" + m_CurrentThreadID + "/runs/" + JRun.at("id").as_string() + "/submit_tool_outputs"));
-
-                                            // Set the headers
-                                            SubmitToolOutputsRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-                                            SubmitToolOutputsRequest.headers().add("OpenAI-Beta", "assistants=v2");
-                                            SubmitToolOutputsRequest.headers().add("Content-Type", "application/json");
-
-                                            // Create the body
-                                            web::json::value SubmitToolOutputsRequestBody = web::json::value::object();
-                                            SubmitToolOutputsRequestBody["tool_outputs"]  = ToolCallOutputs;
-                                            SubmitToolOutputsRequestBody["stream"]        = web::json::value::boolean(true);
-
-                                            // Set the body
-                                            SubmitToolOutputsRequest.set_body(SubmitToolOutputsRequestBody);
-
-                                            // Send the request and get the response (blocking)
-                                            auto SubmitToolOutputsResponse = m_OpenAIClient->request(SubmitToolOutputsRequest).get();
-
-                                            // FIXME: Overwriting the EventStream is a bug i think?
-                                            EventStream = SubmitToolOutputsResponse.body();
-
-                                            if (SubmitToolOutputsResponse.status_code() != web::http::status_codes::OK)
-                                            {
-                                                std::cerr << "Failed to submit the tool outputs" << std::endl;
-                                                std::cout << SubmitToolOutputsResponse.to_string() << std::endl;
-                                            }
-                                        }
-                                    }
-
-                                    EventName.clear();
-                                    EventData.clear();
-                                }
-                                else
-                                {
-                                    if (constexpr std::string_view EVENT_PREFIX = "event: "; Line.find(EVENT_PREFIX) == 0)
-                                    {
-                                        EventName = Line.substr(EVENT_PREFIX.length());
-                                    }
-                                    else if (constexpr std::string_view DATA_PREFIX = "data: "; Line.find(DATA_PREFIX) == 0)
-                                    {
-                                        EventData += Line.substr(DATA_PREFIX.length());
-                                    }
-                                }
-                            }
+                            ProcessOpenAIEventStream(CreateRunResponse.body());
 
                             return pplx::task_from_result();
                         });
@@ -1122,7 +883,7 @@ pplx::task<concurrency::streams::istream> Orion::SpeakSingleAsync(const std::str
             });
 }
 
-pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string& Message)
+pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string& Message) const
 {
     // Split the message into multiple messages if it's too long. But only on periods or newlines.
     // This is to avoid splitting words in half. A message can be longer than x amount of characters if it contains no periods or newlines.
@@ -1180,4 +941,241 @@ pplx::task<std::vector<std::string>> Orion::SplitMessageAsync(const std::string&
 
             return Messages;
         });
+}
+
+void Orion::ProcessOpenAIEventStream(const concurrency::streams::istream& EventStream)
+{
+    std::string Line;
+    std::string EventName;
+    std::string EventData;
+    while (true)
+    {
+        concurrency::streams::container_buffer<std::string> LineBuff {};
+        const auto                                          NUM_CHARS_READ = EventStream.read_line(LineBuff).get();
+        Line                                                               = LineBuff.collection();
+
+        if (NUM_CHARS_READ <= 0)
+        {
+            // Log the event
+            std::cout << "SSE Event name: " << EventName << std::endl;
+            std::cout << "SSEEvent data: " << EventData << std::endl;
+
+            // Process the event
+
+            // Check if the event is the "done" event
+            if (EventName.empty() || EventName == OrionWebServer::SSEOpenAIEventNames::DONE)
+            {
+                // Break out of the loop
+                break;
+            }
+            else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_RUN_CREATED)
+            {
+                web::json::value JMessage = web::json::value::parse(EventData);
+                m_CurrentAssistantRunID   = JMessage.at("id").as_string();
+            }
+            else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_RUN_COMPLETED)
+            {
+                web::json::value JMessage = web::json::value::parse(EventData);
+                m_CurrentAssistantRunID.clear();
+
+                // Format an SSE event for the SSEOrionEventNames::RUN_COMPLETED event.
+                // No data is needed for this event.
+                m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_COMPLETED, web::json::value::object());
+            }
+            else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_MESSAGE_COMPLETED)
+            {
+                // Format an SSE event for the SSEOrionEventNames::MESSAGE_COMPLETED event.
+
+                m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_COMPLETED, web::json::value::object());
+            }
+            else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_MESSAGE_DELTA)
+            {
+                // Format an SSE event for the SSEOrionEventNames::MESSAGE_DELTA event.
+                // The data is the message from the assistant.
+
+                // First Validate the JSON
+                web::json::value JMessage = web::json::value::parse(EventData);
+
+                // Perform checks to ensure the message is valid
+                if (!JMessage.has_field(U("delta")) || !JMessage.at(U("delta")).has_field(U("content")))
+                {
+                    std::cout << U(__func__) << ":" << __LINE__ << U(": Unexpected message format.") << std::endl;
+                    throw std::runtime_error("Unexpected message format.");
+                }
+
+                auto JMessageContentArray = JMessage.at(U("delta")).at(U("content")).as_array();
+                for (const auto& JContentItem : JMessageContentArray)
+                {
+                    // Check if the content item is a text item
+                    if (JContentItem.has_field(U("text")))
+                    {
+                        auto JTextContent      = JContentItem.at(U("text"));
+                        auto TextContentString = JTextContent.has_field(U("value")) ? JTextContent.at(U("value")).as_string() : "";
+
+                        auto JAnnotations = JTextContent.has_field(U("annotations")) ? JTextContent.at(U("annotations")).as_array() : web::json::value::array().as_array();
+
+                        if (!TextContentString.empty())
+                        {
+                            // Get the message from the assistant
+                            web::json::value JClientSSEData = web::json::value::object();
+                            JClientSSEData[U("message")]    = web::json::value::string(TextContentString);
+
+                            // Send the message to the client
+                            m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_DELTA, JClientSSEData);
+                        }
+
+                        // Gather the annotations
+                        for (const auto& JAnnotation : JAnnotations)
+                        {
+                            auto TextToReplace = JAnnotation.at(U("text")).as_string();
+                            auto JFilePath     = JAnnotation.at(U("file_path"));
+                            if (auto FileID = JFilePath.at(U("file_id")).as_string(); !FileID.empty())
+                            {
+                                const auto FILE_EXT     = TextToReplace.substr(TextToReplace.find_last_of('.'));
+                                const auto DOWNLOAD_URL = +"orion/files/" + FileID + FILE_EXT;
+
+                                // SSE event for the annotation
+                                web::json::value JClientSSEData      = web::json::value::object();
+                                JClientSSEData[U("url")]             = web::json::value::string(DOWNLOAD_URL);
+                                JClientSSEData[U("text_to_replace")] = web::json::value::string(TextToReplace);
+
+                                // Send the message to the client
+
+                                m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_ANNOTATION_CREATED, JClientSSEData);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_MESSAGE_CREATED)
+            {
+                // Format an SSE event for the SSEOrionEventNames::MESSAGE_CREATED event.
+                // No data is needed for this event.
+
+                // Send the message to the client
+                m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_STARTED, {});
+            }
+            else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_MESSAGE_IN_PROGRESS)
+            {
+                // Format an SSE event for the SSEOrionEventNames::RUN_COMPLETED event.
+                // No data is needed for this event.
+
+                // Send the message to the client
+                m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::MESSAGE_IN_PROGRESS, {});
+            }
+            else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_RUN_REQUIRES_ACTION)
+            {
+                // Parse the data
+                web::json::value JRun = web::json::value::parse(EventData);
+
+                if (auto JRequiredAction = JRun.at("required_action"); JRequiredAction.at("type").as_string() == "submit_tool_outputs")
+                {
+                    auto JSumbitToolOutputs = JRequiredAction.at("submit_tool_outputs");
+                    auto JToolCalls         = JSumbitToolOutputs.at("tool_calls").as_array();
+
+                    // Create responses for each tool call
+                    auto ToolCallOutputs = web::json::value::array();
+
+                    for (auto& JToolCall : JToolCalls)
+                    {
+                        if (JToolCall.at("type").as_string() == "function")
+                        {
+                            // Get the tool call
+                            auto       JFunctionToolCall = JToolCall.at("function");
+                            const auto TOOL_NAME         = JFunctionToolCall.at("name").as_string();
+                            const auto TOOL_ARGS         = web::json::value::parse(JFunctionToolCall.at("arguments").as_string());
+
+                            auto ToolIt = std::find_if(m_Tools.begin(), m_Tools.end(), [TOOL_NAME](const auto& Tool) { return Tool->GetName() == TOOL_NAME; });
+
+                            if (ToolIt != m_Tools.end())
+                            {
+                                // Get the tool
+                                auto pFunctionTool = dynamic_cast<FunctionTool*>(ToolIt->get());
+                                if (!pFunctionTool)
+                                {
+                                    std::cout << __func__ << ": Tool is not a function tool: " << TOOL_NAME << std::endl;
+                                    continue;
+                                }
+
+                                // Get the tool call outputs
+                                auto JFunctionOutputs = pFunctionTool->Execute(*this, TOOL_ARGS);
+
+                                // Create the tool call outputs
+                                auto JOutput            = web::json::value::object();
+                                JOutput["tool_call_id"] = JToolCall.at("id");
+                                JOutput["output"]       = web::json::value::string(JFunctionOutputs);
+
+                                // Add the tool call outputs to the responses
+                                ToolCallOutputs[ToolCallOutputs.size()] = JOutput;
+                            }
+                            else
+                            {
+                                // Default to an empty output
+                                auto JOutput            = web::json::value::object();
+                                JOutput["tool_call_id"] = JToolCall.at("id");
+                                JOutput["output"]       = web::json::value::string("Tool doesn't exist.  Stop hallucinating.");
+
+                                // Add the tool call outputs to the responses
+                                ToolCallOutputs[ToolCallOutputs.size()] = JOutput;
+                            }
+                        }
+                        else
+                        {
+                            // Default to an empty output
+                            auto JOutput            = web::json::value::object();
+                            JOutput["tool_call_id"] = JToolCall.at("id");
+                            JOutput["output"]       = web::json::value::string("");
+
+                            // Add the tool call outputs to the responses
+                            ToolCallOutputs[ToolCallOutputs.size()] = JOutput;
+                        }
+                    }
+
+                    // Submit the tool call results
+                    web::http::http_request SubmitToolOutputsRequest(web::http::methods::POST);
+
+                    // Set the request uri
+                    SubmitToolOutputsRequest.set_request_uri(U("threads/" + m_CurrentThreadID + "/runs/" + JRun.at("id").as_string() + "/submit_tool_outputs"));
+
+                    // Set the headers
+                    SubmitToolOutputsRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+                    SubmitToolOutputsRequest.headers().add("OpenAI-Beta", "assistants=v2");
+                    SubmitToolOutputsRequest.headers().add("Content-Type", "application/json");
+
+                    // Create the body
+                    web::json::value SubmitToolOutputsRequestBody = web::json::value::object();
+                    SubmitToolOutputsRequestBody["tool_outputs"]  = ToolCallOutputs;
+                    SubmitToolOutputsRequestBody["stream"]        = web::json::value::boolean(true);
+
+                    // Set the body
+                    SubmitToolOutputsRequest.set_body(SubmitToolOutputsRequestBody);
+
+                    // Send the request and get the response (blocking)
+                    auto SubmitToolOutputsResponse = m_OpenAIClient->request(SubmitToolOutputsRequest).get();
+
+                    if (SubmitToolOutputsResponse.status_code() != web::http::status_codes::OK)
+                    {
+                        std::cerr << "Failed to submit the tool outputs" << std::endl;
+                        std::cout << SubmitToolOutputsResponse.to_string() << std::endl;
+                    }
+
+                    ProcessOpenAIEventStream(SubmitToolOutputsResponse.body());
+                }
+            }
+
+            EventName.clear();
+            EventData.clear();
+        }
+        else
+        {
+            if (constexpr std::string_view EVENT_PREFIX = "event: "; Line.find(EVENT_PREFIX) == 0)
+            {
+                EventName = Line.substr(EVENT_PREFIX.length());
+            }
+            else if (constexpr std::string_view DATA_PREFIX = "data: "; Line.find(DATA_PREFIX) == 0)
+            {
+                EventData += Line.substr(DATA_PREFIX.length());
+            }
+        }
+    }
 }

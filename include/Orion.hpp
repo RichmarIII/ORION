@@ -269,7 +269,14 @@ namespace ORION
         /// function.
         /// @param  Message The message to split
         /// @return The message split into multiple parts
-        static pplx::task<std::vector<std::string>> SplitMessageAsync(const std::string& Message);
+        pplx::task<std::vector<std::string>> SplitMessageAsync(const std::string& Message) const;
+
+        /**
+         * @brief Process the OpenAI Event Stream. This function is called when the OpenAI API sends an event stream in response to a request
+         *
+         * @param EventStream The stream to process
+         */
+        void ProcessOpenAIEventStream(const concurrency::streams::istream& EventStream);
 
     private:
         std::string                              m_Name;
