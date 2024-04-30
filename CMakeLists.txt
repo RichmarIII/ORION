@@ -4,6 +4,7 @@ project(ORION VERSION 1.0 DESCRIPTION "Operational Reasoning and Intelligence Op
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/Orion")
 
 add_subdirectory(library)
 add_subdirectory(application)

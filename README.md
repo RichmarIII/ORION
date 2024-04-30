@@ -47,7 +47,7 @@ Before installing ORION, ensure you have the following:
 
 - **C++ Compiler (GCC, MSVC, or CLANG)**: Essential for compiling the project. Choose based on your platform for best compatibility
 - **CMake (version 3.18 or higher)**: Automates the build process, ensuring a smooth setup across different
-  environments. All dependencies are handles automatically by cmake. [Download CMake](https://cmake.org/download/)
+  environments. All dependencies are handled automatically by cmake. [Download CMake](https://cmake.org/download/)
 - **OpenAI API key**: Powers AI functionalities. Obtain from [OpenAI](https://openai.com/)
 - **OpenWeatherMap API key**: Enables weather-related features. Sign up at [OpenWeatherMap](https://openweathermap.org/api)
 - **Home-Assistant API key:** Enabled smart home related features. Obtain from [Home-Assistant](https://developers.home-assistant.io/docs/api/rest/ "How to obtain API Key")
@@ -59,22 +59,23 @@ Before installing ORION, ensure you have the following:
 
 ### Installation Steps
 
-1. Fork the ORION repository to your GitHub account.
-
-
-2. Clone ORION's repository:
+1. Clone ORION's repository:
    ```bash
-   git clone https://github.com/yourusername/ORION.git
+   git clone https://github.com/RichmarIII/ORION.git
    ```
-3. Navigate to the project directory:
+2. Navigate to the project directory:
    ```bash
    cd ORION
    ```
-4. Build ORION:
-   ```
+3. Build ORION:
+   ```bash
    mkdir build && cd build
    cmake ..
    cmake --build .
+   ```
+4. Install ORION:
+   ```bash
+   cmake --install .
    ```
 
 ## Running ORION
@@ -90,7 +91,7 @@ Configure your various API keys before launching ORION. Set them as environment 
 To start ORION, execute:
 
 ```bash
-./ORION
+OrionServer
 ```
 
 Access its web interface at `http://localhost:5000` to interact with the AI assistant.
