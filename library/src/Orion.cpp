@@ -1046,7 +1046,7 @@ void Orion::ProcessOpenAIEventStream(const concurrency::streams::istream& EventS
                             if (auto FileID = JFilePath.at(U("file_id")).as_string(); !FileID.empty())
                             {
                                 const auto FILE_EXT     = TextToReplace.substr(TextToReplace.find_last_of('.'));
-                                const auto DOWNLOAD_URL = +"orion/files/" + FileID + FILE_EXT;
+                                const auto DOWNLOAD_URL = +"/orion/files/" + FileID + FILE_EXT;
 
                                 // SSE event for the annotation
                                 web::json::value JClientSSEData      = web::json::value::object();

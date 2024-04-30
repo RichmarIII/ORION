@@ -4,7 +4,7 @@
 .idea/
 build/
 assets/**/asst_*/
-src/generated/**
+installed/
 
 #Ignore all folders that contain build in the name (e.g. build, build2, cmake-build3-etc)
 *build*/
