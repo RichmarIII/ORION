@@ -42,7 +42,7 @@ namespace ORION
         ///         that are not specific to any particular Orion instance.
         struct AssetDirectories
         {
-#define ASSETS_DIR "../share/Orion/assets"                            // The directory where the web server will look for all assets
+#define ASSETS_DIR "../share/Orion/assets"             // The directory where the web server will look for all assets
 #define ORION_ID_PLACEHOLDER "{orion_id}"              // The placeholder for the Orion id in template strings
 #define USER_ID_PLACEHOLDER "{user_id}"                // The placeholder for the user id in template strings
 #define AUDIO_DIR_TEMPLATE "{audio_dir}"               // The placeholder for the audio directory in template strings
