@@ -174,9 +174,15 @@ void OrionWebServer::HandleRequest(const web::http::http_request& Request)
     {
         HandleOrionFilesEndpoint(Request);
     }
-    else
+    else if (PATH.find("/assets/") != std::string::npos)
     {
         HandleAssetFileEndpoint(Request);
+    }
+    else
+    {
+        auto Response          = web::json::value::object();
+        Response[U("message")] = web::json::value::string(U("The requested endpoint was not found."));
+        Request.reply(web::http::status_codes::NotFound, Response);
     }
 }
 
@@ -263,10 +269,53 @@ void OrionWebServer::HandleRootEndpoint(web::http::http_request Request)
 void OrionWebServer::HandleAssetFileEndpoint(web::http::http_request Request)
 {
     // Get the file name from the request path and make it relative (remove the leading slash)
-    const auto FILE_NAME { std::filesystem::path(Request.request_uri().path()).relative_path() };
+    const auto FILE_NAME { Request.request_uri().path() };
 
-    // Calculate file path based on the file extension
-    const std::string FILE_PATH { AssetDirectories::ResolveBaseAssetDirectory(FILE_NAME) / FILE_NAME };
+    if (FILE_NAME.empty())
+    {
+        auto Response       = web::json::value::object();
+        Response["message"] = web::json::value::string(U("The file name is required."));
+        Request.reply(web::http::status_codes::BadRequest, Response);
+        return;
+    }
+
+
+
+    // Remove leading slash if present
+    auto FileNameCorrected = FILE_NAME[0] == '/' ? FILE_NAME.substr(1) : FILE_NAME;
+
+    // Remove the leading assets directory
+    // Check if beginning of the file name is the assets directory
+    constexpr std::string_view ASSETS_DIR { U("assets/") };
+    FileNameCorrected = { FileNameCorrected.find(ASSETS_DIR) == 0 ? FileNameCorrected.substr(ASSETS_DIR.size()) : FileNameCorrected };
+
+    // FIXME: This Web Server is not secure. It is vulnerable to directory traversal attacks. Fix this by checking if the file path is within the assets directory (We are doing
+    // this above but it is not enough eg. /assets/../file.txt)
+    // Calculate file path.
+    const std::string FILE_PATH { std::filesystem::current_path() / AssetDirectories::STATIC_ASSETS_DIR / FileNameCorrected };
+
+    // Ensure that the file path is within the assets directory. We can do this by getting the absolute path of the file
+    // and checking if it starts with the absolute path of the assets directory.
+    const std::filesystem::path ABSOLUTE_FILE_PATH { std::filesystem::canonical(FILE_PATH) };
+
+    // Check if the file path is within the assets directory
+    if (const std::filesystem::path ABSOLUTE_ASSETS_DIR { std::filesystem::canonical(std::filesystem::current_path() / AssetDirectories::STATIC_ASSETS_DIR) };
+        ABSOLUTE_FILE_PATH.string().find(ABSOLUTE_ASSETS_DIR.string()) != 0)
+    {
+        auto Response       = web::json::value::object();
+        Response["message"] = web::json::value::string(U("The file path is invalid."));
+        Request.reply(web::http::status_codes::BadRequest, Response);
+        return;
+    }
+
+    // Check if the file exists
+    if (!std::filesystem::exists(FILE_PATH))
+    {
+        auto Response       = web::json::value::object();
+        Response["message"] = web::json::value::string(U("The file was not found."));
+        Request.reply(web::http::status_codes::NotFound, Response);
+        return;
+    }
 
     // Get mime type from file extension
     const std::string CONTENT_TYPE { MimeTypes::GetMimeType(FILE_PATH) };

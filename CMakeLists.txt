@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
 
-# Set the cmake toolchain file to use
-#set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
-
 project(ORION VERSION 1.0 DESCRIPTION "Operational Reasoning and Intelligence Optimized Nexus")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -19,6 +16,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # use file(GLOB_RECURSE ASSETS "${CMAKE_SOURCE_DIR}/assets/*") to include all files in the assets directory
 file(GLOB_RECURSE ASSETS
         "${CMAKE_SOURCE_DIR}/assets/*"
+        ${CMAKE_SOURCE_DIR}/.openai_api_key.txt
+        ${CMAKE_SOURCE_DIR}/.openweather_api_key.txt
+        ${CMAKE_SOURCE_DIR}/.hass_api_key.txt
+        ${CMAKE_SOURCE_DIR}/.google_api_key.txt
+        ${CMAKE_SOURCE_DIR}/.google_cse_id.txt
+        ${CMAKE_SOURCE_DIR}/cert.pem
+        ${CMAKE_SOURCE_DIR}/key.pem
 )
 
 # The generated .cpp file to trigger post-build copy assets command.
@@ -34,6 +38,17 @@ add_custom_command(
         DEPENDS ${ASSETS}
         COMMENT "Assets changed: Generating an empty .cpp file to trigger post-build copy assets command..."
 )
+
+# Generate ssl certificates
+add_custom_command(
+        OUTPUT ${CMAKE_SOURCE_DIR}/cert.pem ${CMAKE_SOURCE_DIR}/key.pem
+        COMMAND openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/C=US/ST=CA/L=San Francisco/O=Global Security/OU=IT Department/CN=localhost"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Generating ssl certificates..."
+)
+
+# Add custom target to generate ssl certificates
+add_custom_target(ssl_certificates ALL DEPENDS ${CMAKE_SOURCE_DIR}/cert.pem ${CMAKE_SOURCE_DIR}/key.pem)
 
 # Explicitly list your source files
 set(SOURCES
@@ -59,6 +74,7 @@ set(SOURCES
         src/GUID.cpp
 
         ${ASSETS_CPP_FILE} # This is the generated .cpp file to trigger post-build copy assets command
+        src/Process.cpp
 )
 
 # Explicitly list your header files
@@ -90,6 +106,7 @@ set(HEADERS
         include/tools/UpdateKnowledgeFunctionTool.hpp
         include/MiscConstants.hpp
         include/ETTSAudioFormat.hpp
+        include/Process.hpp
 )
 
 # Define the executable based on the explicitly listed source files
@@ -126,7 +143,7 @@ if (NOT sqlite3_POPULATED)
 endif ()
 
 add_custom_target(sqlite3_build ALL DEPENDS ${sqlite3_BINARY_DIR}/install/lib/libsqlite3.so)
-add_dependencies(ORION sqlite3_build)
+add_dependencies(ORION sqlite3_build ssl_certificates)
 
 FetchContent_MakeAvailable(
         myhtml

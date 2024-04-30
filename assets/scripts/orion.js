@@ -8,6 +8,10 @@ let currentMessageBeingComposed = '';
 let currentMessageBeingComposedForSpeech = '';
 let currentAnnotations = [];
 
+let currentToolBeingComposedName = '';
+let currentToolBeingComposedArguments = '';
+let currentToolBeingComposedOutput = '';
+
 let orionSpeakQueue = [];
 let shouldProcessOrionSpeakQueue = false;
 
@@ -69,7 +73,7 @@ function startVoiceRecording() {
 
                 // Play a beep sound to indicate that recording has ended.
                 const audio = document.getElementById('audio');
-                audio.src = "mic_stop.mp3";
+                audio.src = "/assets/audio/mic_stop.mp3";
                 audio.play();
 
                 // Send the audio data to the server
@@ -81,7 +85,7 @@ function startVoiceRecording() {
 
             // Play a beep sound to indicate that recording has started.
             let audio = document.getElementById('audio');
-            audio.src = "mic_start.mp3";
+            audio.src = "/assets/audio/mic_start.mp3";
             audio.play();
 
             voiceRecorder.start();
@@ -161,15 +165,15 @@ document.getElementById('send-button').addEventListener('touchend', function (ev
     event.preventDefault();
     clearTimeout(micHoldTimer);
     stopVoiceRecording();
-    var messageInput = document.getElementById('message-input').value;
-    var fileInput = document.getElementById('file-input').files;
+    const messageInput = document.getElementById('message-input').value;
+    const fileInput = document.getElementById('file-input').files;
     if (messageInput.trim() !== '' || fileInput.length > 0) {
         console.log('fileInput:', fileInput);
 
         // Create a promise to read the files
-        var promise = new Promise((resolve, reject) => {
-            var Files = [];
-            var filesRead = 0;
+        const promise = new Promise((resolve, reject) => {
+            const Files = [];
+            let filesRead = 0;
 
             if (fileInput.length === 0) {
                 resolve(Files);
@@ -275,6 +279,50 @@ async function startProcessingOrionSpeakQueueAsync() {
 async function orionSpeakAsync(sentence) {
     // Add the sentence to the queue
     orionSpeakQueue.push(sentence);
+}
+
+function renderPreviewImages(messageElement) {
+    // for all links in the output, add an image tag as child of the link for preview
+    const links = messageElement.querySelectorAll('a');
+    links.forEach(link => {
+
+        // Process the link based on the file type
+        if (link.href.match(/\.(jpeg|jpg|gif|png|svg)$/) || link.href.includes('data:image')) {
+            const img = document.createElement('img');
+            img.src = link.href;
+            img.alt = link.href;
+            img.style.maxWidth = '100%';
+            img.style.maxHeight = '100%';
+            link.appendChild(img);
+        } else if (link.href.match(/\.(pdf)$/) || link.href.includes('data:application/pdf')) {
+            const pdf = document.createElement('embed');
+            pdf.src = link.href;
+            pdf.type = 'application/pdf';
+            pdf.width = '100%';
+            pdf.height = '100%';
+            link.appendChild(pdf);
+        } else if (link.href.match(/\.(mp4|webm|ogg)$/) || link.href.includes('data:video')) {
+            const video = document.createElement('video');
+            video.src = link.href;
+            video.controls = true;
+            video.width = '100%';
+            video.height = '100%';
+            video.style.maxWidth = '100%';
+            video.style.maxHeight = '100%';
+            link.appendChild(video);
+        }
+        // Render youtube videos
+        else if (link.href.match(/youtube.com\/watch\?v=([a-zA-Z0-9_-]+)/)) {
+            const videoId = link.href.match(/youtube.com\/watch\?v=([a-zA-Z0-9_-]+)/)[1];
+            const iframe = document.createElement('iframe');
+            iframe.src = `https://www.youtube.com/embed/${videoId}`;
+            iframe.width = '100%';
+            iframe.height = '100%';
+            iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+            iframe.allowFullscreen = true;
+            link.appendChild(iframe);
+        }
+    });
 }
 
 orionEventsSource.addEventListener('message.delta', async function (event) {
@@ -396,6 +444,9 @@ orionEventsSource.addEventListener('message.completed', async function (event) {
             // Update the message with the final message
             lastMessage.querySelector('.message').innerHTML = markdown;
 
+            // Render the preview images
+            renderPreviewImages(lastMessage);
+
             // Process the new message for code blocks and add copy buttons
             processCodeBlocks(lastMessage);
 
@@ -417,6 +468,114 @@ orionEventsSource.addEventListener('upload.file.requested', function (event) {
     const filePath = jdata['file_path'];
 
     console.log('Requested upload file:', filePath);
+});
+
+orionEventsSource.addEventListener('tool.started', function (event) {
+    // This event is triggered when a tool starts
+    const jdata = JSON.parse(event.data);
+
+    currentToolBeingComposedName = '';
+    currentToolBeingComposedArguments = '';
+    currentToolBeingComposedOutput = '';
+
+    // Create a tool message and add it to the chat area
+    const newMessage = createToolMessage("");
+    const chatArea = document.getElementById('chat-area');
+    chatArea.appendChild(newMessage);
+    chatArea.scrollTop = chatArea.scrollHeight;
+});
+
+orionEventsSource.addEventListener('tool.delta', function (event) {
+    // This event is triggered when a tool sends a delta
+    const jdata = JSON.parse(event.data);
+
+    if (jdata.name !== '') {
+        currentToolBeingComposedName = jdata.name;
+    }
+
+    if (jdata.args !== '') {
+        currentToolBeingComposedArguments += jdata.args;
+    }
+
+    // Get the chat area
+    const chatArea = document.getElementById('chat-area');
+
+    // Get the last message in the chat area
+    const lastMessage = chatArea.lastElementChild;
+
+    // Append the new message to the existing message
+    const lastMessageElement = lastMessage.querySelector('.message');
+
+    const toolMessage = {}
+    toolMessage.name = currentToolBeingComposedName;
+    toolMessage.arguments = currentToolBeingComposedArguments;
+    toolMessage.output = currentToolBeingComposedOutput;
+
+    lastMessageElement.innerHTML = JSON.stringify(toolMessage, null, 2);
+
+    // Scroll to the bottom of the chat area
+    chatArea.scrollTop = chatArea.scrollHeight;
+});
+
+orionEventsSource.addEventListener('tool.completed', function (event) {
+    // This event is triggered when a tool completes
+    const jdata = JSON.parse(event.data);
+
+    // Get the chat area
+    const chatArea = document.getElementById('chat-area');
+
+    // Get the last message in the chat area that contains the class 'tool-message-container'
+    const lastMessage = chatArea.lastElementChild;
+
+    // Append the new message to the existing message
+    const lastMessageElement = lastMessage.querySelector('.message');
+
+    const toolMessage = {}
+    toolMessage.name = jdata.name;
+
+    // Try to parse the arguments as JSON
+    try {
+        toolMessage.arguments = JSON.parse(jdata.args);
+    } catch (error) {
+        toolMessage.arguments = jdata.args;
+    }
+
+    // Try to parse the output as JSON
+    try {
+        toolMessage.output = JSON.parse(jdata.output);
+    } catch (error) {
+        toolMessage.output = jdata.output;
+    }
+
+    let toolString = '';
+    if (toolMessage.name === 'code_interpreter') {
+        toolString = toolMessage.arguments;
+
+        // wrap the tool message in a python code block
+        toolString = '```python\n' + toolString + '\n```';
+    } else {
+        toolString = JSON.stringify(toolMessage, null, 2);
+
+        // wrap the tool message in a json code block
+        toolString = '```json\n' + toolString + '\n```';
+    }
+
+    console.log('Tool message:', toolString);
+
+    OrionAPI.renderMarkdownAsync(toolString)
+        .then(markdown => {
+            // Update the message with the final message
+            lastMessageElement.innerHTML = markdown;
+
+            // Render the preview images
+            renderPreviewImages(lastMessageElement);
+
+            // Process the new message for code blocks and add copy buttons
+            processCodeBlocks(lastMessage);
+
+            // Scroll to the bottom of the chat area
+            chatArea.scrollTop = chatArea.scrollHeight;
+        });
 });
 
 // Many browsers do not support playing audio files without user interaction.
@@ -502,7 +661,7 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('User not found in local storage');
 
         // Redirect to the login page
-        window.location.href = '/login.html';
+        window.location.href = '/assets/html/login.html';
     }
 
     // Get the chat area
@@ -532,6 +691,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Process the new messages for code blocks and add copy buttons
             const newMessages = chatArea.querySelectorAll('.orion-message-container');
             newMessages.forEach(newMessage => {
+                renderPreviewImages(newMessage);
                 processCodeBlocks(newMessage);
             });
 
@@ -604,7 +764,7 @@ function createOrionMessage(message) {
 
     // Create a new div element for the image of the speaker
     const image = document.createElement('img');
-    image.src = 'orion.svg';
+    image.src = '/assets/images/orion.svg';
     image.alt = 'Orion';
     image.className = 'image';
 
@@ -621,6 +781,56 @@ function createOrionMessage(message) {
 }
 
 /**
+ * Creates a new message for a tool (but does not add it to the chat area).
+ * @param {string} message The message to display.
+ * @returns {HTMLDivElement} The message container.
+ */
+function createToolMessage(message) {
+
+    // Create a new div element for the collapsible container
+    const collapsibleContainer = document.createElement('div');
+    collapsibleContainer.className = 'tool-collapsible-container';
+
+    // Create a new div element for the collapsible button
+    const collapsibleButton = document.createElement('button');
+    collapsibleButton.className = 'tool-collapsible-button';
+    collapsibleButton.textContent = 'Tool Output';
+    collapsibleButton.addEventListener('click', function () {
+        const content = collapsibleContainer.querySelector('.tool-message-container');
+        // Toggle the content visibility by adding or removing the 'hidden' class
+        content.classList.toggle('hidden');
+    });
+
+    // Create a new div element for the collapsible content
+
+    // Create a new div element for the message-container
+    const messageContainer = document.createElement('div');
+    messageContainer.className = 'tool-message-container';
+    messageContainer.classList.add('hidden');
+
+    // Create a new div element for the image of the speaker
+    const image = document.createElement('img');
+    image.src = '/assets/images/orion.svg';
+    image.alt = 'Orion';
+    image.className = 'image';
+
+    // Create a new div element for the message
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message';
+    messageDiv.innerHTML = message;
+
+    // Add the image and message to the message-container
+    messageContainer.appendChild(image);
+    messageContainer.appendChild(messageDiv);
+
+    // Add the collapsible button and message to the collapsible container
+    collapsibleContainer.appendChild(collapsibleButton);
+    collapsibleContainer.appendChild(messageContainer);
+
+    return collapsibleContainer;
+}
+
+/**
  * Creates a new message for the user (but does not add it to the chat area).
  * This is used internally by the addMessageToChatAsync function.
  * @param {string} message The message to display.
@@ -633,7 +843,7 @@ function createUserMessage(message) {
 
     // Create a new div element for the image of the speaker
     const image = document.createElement('img');
-    image.src = 'user.svg';
+    image.src = '/assets/images/user.svg';
     image.alt = 'User';
     image.className = 'image';
 
@@ -678,6 +888,9 @@ async function addMessageToChatAsync(message, files) {
                 const newMessage = createUserMessage(markdown);
 
                 const chatArea = document.getElementById('chat-area');
+
+                // Render the preview images
+                renderPreviewImages(newMessage);
 
                 // Add the new message to the chat area
                 chatArea.appendChild(newMessage);

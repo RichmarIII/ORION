@@ -1,19 +1,10 @@
-.openai_api_key.txt
-.openweather_api_key.txt
-.hass_api_key.txt
-.google_api_key.txt
-.google_cse_id.txt
 .venv/
 .vscode/
 .history/
 .idea/
 build/
+assets/**/asst_*/
 src/generated/**
-index_preview.html
-embeddings.py
-user-info.json
-cert.pem
-key.pem
 
 #Ignore all folders that contain build in the name (e.g. build, build2, cmake-build3-etc)
 *build*/

@@ -84,6 +84,10 @@ input {
     margin-right: 10px;
 }
 
+.message img {
+    width: 100%;
+}
+
 .user-message-container {
     display: flex;
     padding-top: 30px;
@@ -146,6 +150,31 @@ input {
     font-style: italic;
 }
 
+.tool-message-container {
+    display: flex;
+    padding-top: 30px;
+    word-wrap: break-word;
+    flex-direction: column;
+    width: auto;
+    align-items: flex-start;
+}
+
+.tool-message-container .image {
+    border-radius: 4px 4px 0px 0px;
+    word-wrap: break-word;
+    width: 48px;
+    background-color: #456;
+}
+
+.tool-message-container .message {
+    border-radius: 0px 4px 4px 4px;
+    word-wrap: break-word;
+    width: 80%;
+    flex-direction: column;
+    padding: 10px;
+    background-color: #456;
+}
+
 #file-label {
     cursor: pointer;
     margin-right: 10px;
@@ -173,6 +202,10 @@ button:hover {
 
 button:active {
     background-color: #222;
+}
+
+.hidden {
+    display: none;
 }
 
 pre code.hljs {

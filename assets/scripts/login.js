@@ -42,7 +42,7 @@ document.getElementById('login-form').addEventListener('submit', function(event)
         localStorage.setItem('user_id', data.user_id);
 
         // Navigate to the orion page
-        window.location.href = '/orion.html';
+        window.location.href = '/assets/html/orion.html';
     })
     .catch((error) => {
         console.error('Error:', error);

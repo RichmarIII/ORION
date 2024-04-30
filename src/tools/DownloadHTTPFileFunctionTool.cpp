@@ -41,7 +41,8 @@ std::string DownloadHTTPFileFunctionTool::Execute(Orion& Orion, const web::json:
 
     const auto DOWNLOAD_FILE_LINK_RESPONSE_VECTOR = DOWNLOAD_FILE_LINK_RESPONSE.extract_vector().get();
 
-    const auto DOWNLOAD_PATH = std::filesystem::current_path() / "downloads" / FileName;
+    const auto ASSET_RELATIVE_PATH = std::string("assets/") + "downloads/" + FileName;
+    const auto DOWNLOAD_PATH       = std::filesystem::current_path() / ASSET_RELATIVE_PATH;
 
     if (!std::filesystem::exists(DOWNLOAD_PATH.parent_path()))
     {
@@ -53,9 +54,16 @@ std::string DownloadHTTPFileFunctionTool::Execute(Orion& Orion, const web::json:
     File.write(reinterpret_cast<const char*>(DOWNLOAD_FILE_LINK_RESPONSE_VECTOR.data()), DOWNLOAD_FILE_LINK_RESPONSE_VECTOR.size());
     File.close();
 
-    auto Response                                                   = web::json::value::object();
-    Response[FunctionResultStatics::NAME_ORION_INSTRUCTIONS.data()] = web::json::value::string(U("you MUST display the file as a link to the user using the file:// protocol."));
+    auto Response = web::json::value::object();
+    Response[FunctionResultStatics::NAME_ORION_INSTRUCTIONS.data()] =
+        web::json::value::string(U("you MUST use the value of 'file_path' VERBATIM and MUST show the link to the user. eg [](file_path)"));
 
-    Response[FunctionResultStatics::NAME_RESULT.data()] = web::json::value::string(DOWNLOAD_PATH.string());
+    // The web server will serve the file from the assets folder
+    const auto WEB_SERVER_RELATIVE_PATH = "https:/" + ASSET_RELATIVE_PATH;
+
+    auto ResultObject                                   = web::json::value::object();
+    ResultObject["file_path"]                           = web::json::value::string(WEB_SERVER_RELATIVE_PATH);
+    Response[FunctionResultStatics::NAME_RESULT.data()] = ResultObject;
+
     return Response.serialize();
 }

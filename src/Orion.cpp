@@ -20,8 +20,11 @@
 
 // Include standard headers
 #include "GUID.hpp"
+#include "Process.hpp"
+#include "tools/CodeInterpreterTool.hpp"
 
 #include <filesystem>
+#include <future>
 #include <thread>
 
 using namespace ORION;
@@ -242,7 +245,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
     }
 
     // Upload the files
-    auto JFiles = web::json::value::array();
+    auto JAttachments = web::json::value::array();
     for (const auto& File : Files)
     {
         // Get the file name and data
@@ -305,8 +308,19 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
         auto       UploadFileResponseJson = UploadFileResponse.extract_json().get();
         const auto FILE_ID                = UploadFileResponseJson.at("id").as_string();
 
+        auto JAttachment      = web::json::value::object();
+        auto JAttachmentTools = web::json::value::array();
+        auto JAttachmentTool  = web::json::value::object();
+
+        JAttachmentTool["type"] = web::json::value::string("code_interpreter");
+
+        JAttachmentTools[JAttachmentTools.size()] = JAttachmentTool;
+
+        JAttachment["file_id"] = web::json::value::string(FILE_ID);
+        JAttachment["tools"]   = JAttachmentTools;
+
         // Add the file to the list of files
-        JFiles[JFiles.size()] = web::json::value::string(FILE_ID);
+        JAttachments[JAttachments.size()] = JAttachment;
     }
 
     // Create a message in the openai thread
@@ -319,7 +333,7 @@ pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::
     web::json::value CreateMessageBody = web::json::value::object();
     CreateMessageBody["content"]       = web::json::value::string(Message);
     CreateMessageBody["role"]          = web::json::value::string("user");
-    // CreateMessageBody["file_ids"]      = JFiles;
+    CreateMessageBody["attachments"]   = JAttachments;
     CreateMessageRequest.set_body(CreateMessageBody);
 
     return m_OpenAIClient->request(CreateMessageRequest)
@@ -602,8 +616,8 @@ pplx::task<concurrency::streams::istream> Orion::SpeakAsync(const std::string& M
                         FfmpegCommand.pop_back(); // Remove the last pipe
                         FfmpegCommand += "\" -acodec copy " + ABS_OUTPUT_FILE_PATH.string();
 
-                        // Execute the command
-                        std::system(FfmpegCommand.c_str());
+                        // Execute the command in a separate process and wait for it to finish
+                        Process::Execute(FfmpegCommand.c_str(), nullptr);
 
                         const auto AUDIO_FILE_STREAM = concurrency::streams::fstream::open_istream(ABS_OUTPUT_FILE_PATH.string(), std::ios::in | std::ios::binary);
 
@@ -766,7 +780,7 @@ pplx::task<web::json::value> Orion::GetChatHistoryAsync() const
 
                                             if (IS_MARKDOWN_REQUESTED)
                                             {
-                                                char* pMarkdown = cmark_markdown_to_html(Msg.c_str(), Msg.length(), CMARK_OPT_DEFAULT);
+                                                char* pMarkdown = cmark_markdown_to_html(Msg.c_str(), Msg.length(), CMARK_OPT_UNSAFE);
                                                 Msg             = pMarkdown;
                                                 free(pMarkdown);
                                             }
@@ -1090,30 +1104,38 @@ void Orion::ProcessOpenAIEventStream(const concurrency::streams::istream& EventS
                             if (ToolIt != m_Tools.end())
                             {
                                 // Get the tool
-                                auto pFunctionTool = dynamic_cast<FunctionTool*>(ToolIt->get());
-                                if (!pFunctionTool)
+                                if (auto pFunctionTool = dynamic_cast<FunctionTool*>(ToolIt->get()); !pFunctionTool)
                                 {
                                     std::cout << __func__ << ": Tool is not a function tool: " << TOOL_NAME << std::endl;
-                                    continue;
+
+                                    // A built-in tool
+                                    auto JOutput            = web::json::value::object();
+                                    JOutput["tool_call_id"] = JToolCall.at("id");
+                                    JOutput["output"]       = web::json::value::string("");
+
+                                    // Add the tool call outputs to the responses
+                                    ToolCallOutputs[ToolCallOutputs.size()] = JOutput;
                                 }
+                                else
+                                {
+                                    // Get the tool call outputs
+                                    auto JFunctionOutputs = pFunctionTool->Execute(*this, TOOL_ARGS);
 
-                                // Get the tool call outputs
-                                auto JFunctionOutputs = pFunctionTool->Execute(*this, TOOL_ARGS);
+                                    // Create the tool call outputs
+                                    auto JOutput            = web::json::value::object();
+                                    JOutput["tool_call_id"] = JToolCall.at("id");
+                                    JOutput["output"]       = web::json::value::string(JFunctionOutputs);
 
-                                // Create the tool call outputs
-                                auto JOutput            = web::json::value::object();
-                                JOutput["tool_call_id"] = JToolCall.at("id");
-                                JOutput["output"]       = web::json::value::string(JFunctionOutputs);
-
-                                // Add the tool call outputs to the responses
-                                ToolCallOutputs[ToolCallOutputs.size()] = JOutput;
+                                    // Add the tool call outputs to the responses
+                                    ToolCallOutputs[ToolCallOutputs.size()] = JOutput;
+                                }
                             }
                             else
                             {
-                                // Default to an empty output
+                                // Possibly a hallucination
                                 auto JOutput            = web::json::value::object();
                                 JOutput["tool_call_id"] = JToolCall.at("id");
-                                JOutput["output"]       = web::json::value::string("Tool doesn't exist.  Stop hallucinating.");
+                                JOutput["output"]       = JToolCall.at("output");
 
                                 // Add the tool call outputs to the responses
                                 ToolCallOutputs[ToolCallOutputs.size()] = JOutput;
@@ -1160,6 +1182,89 @@ void Orion::ProcessOpenAIEventStream(const concurrency::streams::istream& EventS
                     }
 
                     ProcessOpenAIEventStream(SubmitToolOutputsResponse.body());
+                }
+            }
+            else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_RUN_STEP_CREATED)
+            {
+                const auto JRUN_STEP     = web::json::value::parse(EventData);
+                const auto JSTEP_DETAILS = JRUN_STEP.at("step_details");
+
+                if (const auto STEP_TYPE = JSTEP_DETAILS.at("type").as_string(); STEP_TYPE == "tool_calls")
+                {
+                    auto JEventData = web::json::value::object();
+
+                    // Send the message to the client
+                    m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::TOOL_STARTED, JEventData);
+                }
+            }
+            else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_RUN_STEP_DELTA)
+            {
+                const auto JRUN_STEP     = web::json::value::parse(EventData);
+                const auto JSTEP_DETAILS = JRUN_STEP.at("delta").at("step_details");
+
+                if (const auto STEP_TYPE = JSTEP_DETAILS.at("type").as_string(); STEP_TYPE == "tool_calls")
+                {
+                    auto JEventData = web::json::value::object();
+
+                    if (const auto JTOOL_CALL = JSTEP_DETAILS.at("tool_calls").as_array().at(0); JTOOL_CALL.at("type").as_string() == "function")
+                    {
+                        const auto JFUNCTION       = JTOOL_CALL.at("function");
+                        const auto FUNCTION_NAME   = JFUNCTION.has_field("name") ? JFUNCTION.at("name") : web::json::value::string("");
+                        const auto FUNCTION_ARGS   = JFUNCTION.has_field("arguments") ? JFUNCTION.at("arguments") : web::json::value::string("");
+                        const auto FUNCTION_OUTPUT = JFUNCTION.has_field("output") ? JFUNCTION.at("output") : web::json::value::object();
+
+                        JEventData["name"]   = FUNCTION_NAME;
+                        JEventData["args"]   = FUNCTION_ARGS;
+                        JEventData["output"] = FUNCTION_OUTPUT;
+                    }
+                    else if (JTOOL_CALL.at("type").as_string() == "code_interpreter")
+                    {
+                        const auto JCODE_INTERPRETER = JTOOL_CALL.at("code_interpreter");
+                        const auto INPUT             = JCODE_INTERPRETER.has_field("input") ? JCODE_INTERPRETER.at("input") : web::json::value::string("");
+                        const auto OUTPUTS           = JCODE_INTERPRETER.has_field("outputs") ? JCODE_INTERPRETER.at("outputs") : web::json::value::array();
+
+                        JEventData["name"]   = web::json::value::string("code_interpreter");
+                        JEventData["args"]   = INPUT;
+                        JEventData["output"] = OUTPUTS;
+                    }
+
+                    // Send the message to the client
+                    m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::TOOL_DELTA, JEventData);
+                }
+            }
+            else if (EventName == OrionWebServer::SSEOpenAIEventNames::THREAD_RUN_STEP_COMPLETED)
+            {
+                const auto JRUN_STEP     = web::json::value::parse(EventData);
+                const auto JSTEP_DETAILS = JRUN_STEP.at("step_details");
+
+                if (const auto STEP_TYPE = JSTEP_DETAILS.at("type").as_string(); STEP_TYPE == "tool_calls")
+                {
+                    auto JEventData = web::json::value::object();
+
+                    if (const auto JTOOL_CALL = JSTEP_DETAILS.at("tool_calls").as_array().at(0); JTOOL_CALL.at("type").as_string() == "function")
+                    {
+                        const auto JFUNCTION       = JTOOL_CALL.at("function");
+                        const auto FUNCTION_NAME   = JFUNCTION.has_field("name") ? JFUNCTION.at("name") : web::json::value::string("");
+                        const auto FUNCTION_ARGS   = JFUNCTION.has_field("arguments") ? JFUNCTION.at("arguments") : web::json::value::string("");
+                        const auto FUNCTION_OUTPUT = JFUNCTION.has_field("output") ? JFUNCTION.at("output") : web::json::value::object();
+
+                        JEventData["name"]   = FUNCTION_NAME;
+                        JEventData["args"]   = FUNCTION_ARGS;
+                        JEventData["output"] = FUNCTION_OUTPUT;
+                    }
+                    else if (JTOOL_CALL.at("type").as_string() == "code_interpreter")
+                    {
+                        const auto JCODE_INTERPRETER = JTOOL_CALL.at("code_interpreter");
+                        const auto INPUT             = JCODE_INTERPRETER.has_field("input") ? JCODE_INTERPRETER.at("input") : web::json::value::string("");
+                        const auto OUTPUTS           = JCODE_INTERPRETER.has_field("outputs") ? JCODE_INTERPRETER.at("outputs") : web::json::value::array();
+
+                        JEventData["name"]   = web::json::value::string("code_interpreter");
+                        JEventData["args"]   = INPUT;
+                        JEventData["output"] = OUTPUTS;
+                    }
+
+                    // Send the message to the client
+                    m_pOrionWebServer->SendServerEvent(OrionWebServer::SSEOrionEventNames::TOOL_COMPLETED, JEventData);
                 }
             }
 

@@ -150,6 +150,7 @@ namespace ORION
             static constexpr std::string_view THREAD_RUN_COMPLETED        = "thread.run.completed";
             static constexpr std::string_view THREAD_RUN_STEP_CREATED     = "thread.run.step.created";
             static constexpr std::string_view THREAD_RUN_STEP_IN_PROGRESS = "thread.run.step.in_progress";
+            static constexpr std::string_view THREAD_RUN_STEP_DELTA       = "thread.run.step.delta";
             static constexpr std::string_view THREAD_RUN_STEP_COMPLETED   = "thread.run.step.completed";
             static constexpr std::string_view THREAD_MESSAGE_CREATED      = "thread.message.created";
             static constexpr std::string_view THREAD_MESSAGE_IN_PROGRESS  = "thread.message.in_progress";
@@ -170,6 +171,9 @@ namespace ORION
             static constexpr std::string_view MESSAGE_IN_PROGRESS        = "message.in_progress";
             static constexpr std::string_view MESSAGE_ANNOTATION_CREATED = "message.annotation.created";
             static constexpr std::string_view UPLOAD_FILE_REQUESTED      = "upload.file.requested";
+            static constexpr std::string_view TOOL_STARTED               = "tool.started";
+            static constexpr std::string_view TOOL_DELTA                 = "tool.delta";
+            static constexpr std::string_view TOOL_COMPLETED             = "tool.completed";
         };
 
         /// @brief  Destructor (virtual for inheritance)

@@ -39,7 +39,7 @@ document.getElementById('register-form').addEventListener('submit', function(eve
         localStorage.setItem('user_id', data.user_id);
 
         // Navigate to the orion page
-        window.location.href = '/orion.html';
+        window.location.href = '/assets/html/orion.html';
     })
     .catch((error) => {
         console.error('Error:', error);

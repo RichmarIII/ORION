@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', function()
     // Navigate to the login page if the user is not logged in
     if (!localStorage.getItem('user_id'))
     {
-        window.location.href = '/login.html';
+        window.location.href = '/assets/html/login.html';
     }
     else
     {
@@ -23,12 +23,12 @@ document.addEventListener('DOMContentLoaded', function()
         {
             if (!data.user_id)
             {
-                window.location.href = '/login.html';
+                window.location.href = '/assets/html/login.html';
             }
             else
             {
                 // Navigate to the orion page if the user is logged in
-                window.location.href = '/orion.html';
+                window.location.href = '/assets/html/orion.html';
             }
         }).catch(error => {
             console.error('Error:', error);
