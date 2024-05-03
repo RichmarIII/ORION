@@ -1,3 +1,5 @@
+![ubuntu-latest](https://github.com/github/docs/actions/workflows/cmake-multi-platform.yml/badge.svg?branch=main)
+
 ## ORION: Operational Reasoning and Intelligence Optimized Nexus
 
 ### What is ORION?
