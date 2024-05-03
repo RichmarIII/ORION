@@ -42,10 +42,10 @@ add_library(Orion SHARED ${HEADERS} ${SOURCES})
 
 include(FetchContent)
 
-message(STATUS "Github Token: " ${GITHUB_TOKEN})
+# execute install_boost.sh
+#execute_process(COMMAND ${CMAKE_SOURCE_DIR}/install_boost.sh)
 
 if (NOT DEFINED GITHUB_TOKEN)
-    FetchContent_Declare(boost GIT_REPOSITORY git@github.com:boostorg/boost.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(myhtml GIT_REPOSITORY git@github.com:lexborisov/myhtml.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(cpprestsdk GIT_REPOSITORY git@github.com:microsoft/cpprestsdk.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(cmark GIT_REPOSITORY git@github.com:commonmark/cmark.git EXCLUDE_FROM_ALL)
@@ -56,7 +56,6 @@ if (NOT DEFINED GITHUB_TOKEN)
     )
     FetchContent_Declare(sqlite_modern_cpp GIT_REPOSITORY git@github.com:SqliteModernCpp/sqlite_modern_cpp.git EXCLUDE_FROM_ALL)
 else ()
-    FetchContent_Declare(boost GIT_REPOSITORY https://${GITHUB_TOKEN}@github.com/boostorg/boost.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(myhtml GIT_REPOSITORY https://${GITHUB_TOKEN}@github.com/lexborisov/myhtml.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(cpprestsdk GIT_REPOSITORY https://${GITHUB_TOKEN}@github.com/microsoft/cpprestsdk.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(cmark GIT_REPOSITORY https://${GITHUB_TOKEN}@github.com/commonmark/cmark.git EXCLUDE_FROM_ALL)
@@ -88,18 +87,13 @@ add_custom_target(sqlite3_build ALL DEPENDS ${sqlite3_BINARY_DIR}/install/lib/li
 add_dependencies(Orion sqlite3_build ssl_certificates)
 
 FetchContent_MakeAvailable(
-        boost
-)
-
-# Set the CMAKE_PREFIX_PATH to the location of the boost installation so that the cpprestsdk can find it
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${boost_SOURCE_DIR})
-
-FetchContent_MakeAvailable(
         myhtml
         cpprestsdk
         cmark
         sqlite_modern_cpp
 )
+
+
 
 get_target_property(MYHTML_SOURCE_DIR myhtml SOURCE_DIR)
 set(MYHTML_INCLUDE_DIR ${MYHTML_SOURCE_DIR}/include)
@@ -113,7 +107,6 @@ set(SQLITE3_INCLUDE_DIR ${sqlite3_BINARY_DIR}/install/include)
 set(SQLITE3_LIBRARY ${sqlite3_BINARY_DIR}/install/lib/libsqlite3.so)
 set(SQLITE_MODERN_CPP_SOURCE_DIR ${sqlite_modern_cpp_SOURCE_DIR})
 set(SQLITE_MODERN_CPP_INCLUDE_DIR ${SQLITE_MODERN_CPP_SOURCE_DIR}/hdr)
-
 
 # Include directories for header files
 target_include_directories(Orion PUBLIC
