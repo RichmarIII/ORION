@@ -43,6 +43,7 @@ namespace ORION
         struct AssetDirectories
         {
 #define ASSETS_DIR "../share/Orion/assets"             // The directory where the web server will look for all assets
+#define PLUGINS_DIR "../share/Orion/plugins"           // The directory where the web server will look for all plugins
 #define ORION_ID_PLACEHOLDER "{orion_id}"              // The placeholder for the Orion id in template strings
 #define USER_ID_PLACEHOLDER "{user_id}"                // The placeholder for the user id in template strings
 #define AUDIO_DIR_TEMPLATE "{audio_dir}"               // The placeholder for the audio directory in template strings
@@ -70,6 +71,8 @@ namespace ORION
 
             /// @brief  The directory where the web server will look for static database files
             static constexpr auto STATIC_DATABASE_DIR = DATABASE_DIR;
+
+            static constexpr auto STATIC_PLUGINS_DIR = PLUGINS_DIR;
 
             /// @brief  The directory where the web server will look for the users database file
             static constexpr auto DATABASE_FILE = ASSETS_DIR "/" DATABASE_DIR "/" USERS_DATABASE_FILE_NAME;
@@ -120,9 +123,14 @@ namespace ORION
                 return ResolveTemplate(USER_KNOWLEDGE_DIR_TEMPLATE, UserId);
             }
 
-            static inline std::string ResolveOpenAIKeyFile()
+            static inline constexpr std::string_view ResolveOpenAIKeyFile()
             {
                 return OPENAI_API_KEY_FILE;
+            }
+
+            static inline constexpr std::string_view ResolveBasePluginDirectory()
+            {
+                return STATIC_PLUGINS_DIR;
             }
 
             /// @brief  Resolves the base asset directory for a given file extension
@@ -131,6 +139,7 @@ namespace ORION
             static std::string ResolveBaseAssetDirectory(const std::string& Extension);
 
 #undef ASSETS_DIR
+#undef PLUGINS_DIR
 #undef DATABASE_DIR
 #undef USERS_DATABASE_FILE_NAME
 #undef OPENAI_API_KEY_FILE_NAME
@@ -312,6 +321,20 @@ namespace ORION
          * @example Response: The contents of the file specified by the file_id
          */
         void HandleOrionFilesEndpoint(web::http::http_request Request) const;
+
+        /**
+         * @brief Handles the /orion/plugins endpoint. This endpoint is used to list all available Orion plugins or enable/disable plugins.
+         *
+         * @param Request The HTTP request
+         * @example curl -X GET http://localhost:5000/orion/plugins
+         * @example Response: A list of all available Orion plugins with their information
+         * @example curl -X GET http://localhost:5000/orion/plugins/plugin_name
+         * @example Response: Plugin information for the specified plugin
+         * @example curl -X POST -d [{"name": "plugin_name", "enabled": true}] http://localhost:5000/orion/plugins
+         * @example Response: 200 OK if the plugins were enabled/disabled successfully or 400 Bad Request if the plugin could not be enabled/disabled with the response body
+         * containing the error message
+         */
+        void HandleOrionPluginsEndpoint(web::http::http_request Request) const;
 
         /// @brief  Instantiates a new Orion instance and returns the new instance. If an Orion instance with the given id already exists on
         /// the server A new local Orion instance is created from the data of the existing server instance. If an Orion instance with the given id

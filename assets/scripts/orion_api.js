@@ -113,4 +113,46 @@ class OrionAPI {
         }).then(response => response.json())
             .then(data => data['message']);
     }
+
+    /**
+     * Returns the available plugins that can be enabled or disabled.
+     * @returns {Promise<Array>} The available plugins. Each plugin is an object with the following properties: {name: string, description: string, enabled: boolean, author: string, version: string}
+     */
+    static async getAvailablePluginsAsync() {
+        return fetch('/orion/plugins', {
+            method: 'GET', headers: {
+                'X-User-Id': localStorage.getItem('user_id')
+            }
+        }).then(response => response.json())
+            .then(data => data);
+    }
+
+    /**
+     * Returns the information about the given plugin.
+     * @param pluginName {string} The name of the plugin to get information about.
+     * @returns {Promise<{name: string, description: string, enabled: boolean, author: string}>} The information about the plugin.
+     */
+    static async getPluginInfoAsync(pluginName) {
+        return fetch('/orion/plugins/' + pluginName, {
+            method: 'GET', headers: {
+                'X-User-Id': localStorage.getItem('user_id')
+            }
+        }).then(response => response.json())
+            .then(data => data);
+    }
+
+    /**
+     * Enables or disables the given plugins.
+     * @param plugins {Array<{name: string, enabled: boolean}>} The list of plugins to enable or disable. The array should have the following structure: [{name: string, enabled: boolean}]
+     * @returns {Promise<{success: [string], failed: [string]}>} The list of plugins indicated whether they were successfully enabled/disabled. The array has the following structure: {success: [string], failed: [string]}
+     */
+    static async modifyPluginsAsync(plugins) {
+        return fetch('/orion/plugins', {
+            method: 'POST', headers: {
+                'X-User-Id': localStorage.getItem('user_id'),
+                'Content-Type': 'application/json'
+            }, body: JSON.stringify(plugins)
+        }).then(response => response.json())
+            .then(data => data);
+    }
 }

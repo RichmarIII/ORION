@@ -1,0 +1,1 @@
+basic_plugin(Intelligence ChangeIntelligenceFunctionTool.hpp ChangeIntelligenceFunctionTool.cpp IntelligencePlugin.hpp IntelligencePlugin.cpp)

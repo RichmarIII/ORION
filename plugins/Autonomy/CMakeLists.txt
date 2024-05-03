@@ -1,0 +1,1 @@
+basic_plugin(Autonomy CreateAutonomousActionPlanFunctionTool.hpp CreateAutonomousActionPlanFunctionTool.cpp AutonomyPlugin.hpp AutonomyPlugin.cpp)

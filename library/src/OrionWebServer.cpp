@@ -3,23 +3,8 @@
 #include "MimeTypes.hpp"
 #include "Orion.hpp"
 #include "User.hpp"
-#include "tools/ChangeIntelligenceFunctionTool.hpp"
-#include "tools/ChangeVoiceFunctionTool.hpp"
 #include "tools/CodeInterpreterTool.hpp"
-#include "tools/CreateAutonomousActionPlanFunctionTool.hpp"
-#include "tools/DownloadHTTPFileFunctionTool.hpp"
-#include "tools/ExecSmartDeviceServiceFunctionTool.hpp"
-#include "tools/GetWeatherFunctionTool.hpp"
-#include "tools/ListSmartDevicesFunctionTool.hpp"
-#include "tools/NavigateLinkFunctionTool.hpp"
-#include "tools/RecallKnowledgeFunctionTool.hpp"
-#include "tools/RememberKnowledgeFunctionTool.hpp"
-#include "tools/RequestFileUploadFromUserFunctionTool.hpp"
 #include "tools/RetrievalTool.hpp"
-#include "tools/SearchFilesystemFunctionTool.hpp"
-#include "tools/TakeScreenshotFunctionTool.hpp"
-#include "tools/UpdateKnowledgeFunctionTool.hpp"
-#include "tools/WebSearchFunctionTool.hpp"
 
 #include <cmark.h>
 
@@ -178,6 +163,10 @@ void OrionWebServer::HandleRequest(const web::http::http_request& Request)
     {
         HandleAssetFileEndpoint(Request);
     }
+    else if (PATH.find("orion/plugins"))
+    {
+        HandleOrionPluginsEndpoint(Request);
+    }
     else
     {
         auto Response          = web::json::value::object();
@@ -278,8 +267,6 @@ void OrionWebServer::HandleAssetFileEndpoint(web::http::http_request Request)
         Request.reply(web::http::status_codes::BadRequest, Response);
         return;
     }
-
-
 
     // Remove leading slash if present
     auto FileNameCorrected = FILE_NAME[0] == '/' ? FILE_NAME.substr(1) : FILE_NAME;
@@ -527,25 +514,9 @@ const Orion& OrionWebServer::InstantiateOrionInstance(const std::string& Existin
 
     // Declare Default Tools
     std::vector<std::unique_ptr<IOrionTool>> Tools {};
-    Tools.reserve(10);
 
-    Tools.push_back(std::make_unique<TakeScreenshotFunctionTool>());
-    Tools.push_back(std::make_unique<SearchFilesystemFunctionTool>());
-    Tools.push_back(std::make_unique<GetWeatherFunctionTool>());
-    Tools.push_back(std::make_unique<WebSearchFunctionTool>());
-    Tools.push_back(std::make_unique<ChangeVoiceFunctionTool>());
-    Tools.push_back(std::make_unique<ChangeIntelligenceFunctionTool>());
     // Tools.push_back(std::make_unique<RetrievalTool>());
     Tools.push_back(std::make_unique<CodeInterpreterTool>());
-    Tools.push_back(std::make_unique<ListSmartDevicesFunctionTool>());
-    Tools.push_back(std::make_unique<ExecSmartDeviceServiceFunctionTool>());
-    Tools.push_back(std::make_unique<NavigateLinkFunctionTool>());
-    Tools.push_back(std::make_unique<DownloadHTTPFileFunctionTool>());
-    Tools.push_back(std::make_unique<CreateAutonomousActionPlanFunctionTool>());
-    Tools.push_back(std::make_unique<RequestFileUploadFromUserFunctionTool>());
-    Tools.push_back(std::make_unique<RememberKnowledgeFunctionTool>());
-    Tools.push_back(std::make_unique<RecallKnowledgeFunctionTool>());
-    Tools.push_back(std::make_unique<UpdateKnowledgeFunctionTool>());
 
     // Check if the Orion instance already exists locally (Only one Orion instance is allowed per user)
 
@@ -753,7 +724,7 @@ void OrionWebServer::HandleTranscribeEndpoint(web::http::http_request Request) c
             [this, Request](std::vector<unsigned char> AudioData)
             {
                 // Get openai api key
-                std::ifstream OpenAIAPIKeyFile { AssetDirectories::ResolveOpenAIKeyFile() };
+                std::ifstream OpenAIAPIKeyFile { AssetDirectories::ResolveOpenAIKeyFile().data() };
                 std::string   OpenAIAPIKey { std::istreambuf_iterator<char>(OpenAIAPIKeyFile), std::istreambuf_iterator<char>() };
                 if (OpenAIAPIKey.empty())
                 {
@@ -907,7 +878,7 @@ void OrionWebServer::HandleOrionEventsEndpoint(web::http::http_request Request)
 void OrionWebServer::HandleOrionFilesEndpoint(web::http::http_request Request) const
 {
     // Load OpenAI API Key From environment variable or file
-    std::ifstream OpenAIAPIKeyFile { AssetDirectories::ResolveOpenAIKeyFile() };
+    std::ifstream OpenAIAPIKeyFile { AssetDirectories::ResolveOpenAIKeyFile().data() };
     std::string   OpenAIAPIKey { std::istreambuf_iterator<char>(OpenAIAPIKeyFile), std::istreambuf_iterator<char>() };
     if (OpenAIAPIKey.empty())
     {
@@ -949,6 +920,149 @@ void OrionWebServer::HandleOrionFilesEndpoint(web::http::http_request Request) c
                 // Forward the response to the client
                 Request.reply(FileRequestResponse.status_code(), FileRequestResponse.body(), MIME_TYPE);
             });
+}
+
+void OrionWebServer::HandleOrionPluginsEndpoint(web::http::http_request Request) const
+{
+    // Authenticate the request
+    if (!Request.headers().has(U("X-User-Id")))
+    {
+        Request.reply(web::http::status_codes::BadRequest, U("The X-User-Id header is required."));
+        return;
+    }
+
+    // Get the Orion instance id from the header
+    const auto USER_ID = Request.headers().find(U("X-User-Id"))->second;
+
+    // Find User in the list of logged in users
+    const auto USER_ITER = std::find_if(m_LoggedInUsers.begin(), m_LoggedInUsers.end(), [USER_ID](const User& User) { return User.UserID == USER_ID; });
+    if (USER_ITER == m_LoggedInUsers.end())
+    {
+        Request.reply(web::http::status_codes::Unauthorized, U("User is not logged in."));
+        return;
+    }
+
+    // Find the Orion instance with the given id
+    auto OrionIt = std::find_if(m_OrionInstances.begin(),
+                                m_OrionInstances.end(),
+                                [USER_ITER](const std::unique_ptr<Orion>& Orion) { return Orion->GetCurrentAssistantID() == USER_ITER->OrionID; });
+
+    // Check if the Orion instance was found
+    if (OrionIt == m_OrionInstances.end())
+    {
+        Request.reply(web::http::status_codes::BadRequest, U("The Orion instance with the given id was not found."));
+        return;
+    }
+
+    if (Request.method() == web::http::methods::GET)
+    {
+        // Requesting the list of plugins or information about a specific plugin
+
+        // Get the plugin name from the request path (if it does not exist then we are requesting the list of plugins).
+        // Make sure to handle errors if the plugin name is not found.
+        if (constexpr std::string_view ENDPOINT_PATH { "orion/plugins/" }; Request.request_uri().path().size() > ENDPOINT_PATH.size())
+        {
+            // Get the plugin name
+            const auto PLUGIN_NAME = Request.request_uri().path().substr(ENDPOINT_PATH.size());
+
+            // Get the plugin information
+            const auto PLUGIN = (*OrionIt)->InspectPlugin(PLUGIN_NAME);
+            if (!PLUGIN)
+            {
+                // Send the response
+                Request.reply(web::http::status_codes::NotFound, U("The plugin was not found."));
+                return;
+            }
+
+            auto PluginInfo              = web::json::value::object();
+            PluginInfo[U("name")]        = web::json::value::string(PLUGIN->GetPlugin()->GetName().data());
+            PluginInfo[U("description")] = web::json::value::string(PLUGIN->GetPlugin()->GetDescription().data());
+            PluginInfo[U("version")]     = web::json::value::string(PLUGIN->GetPlugin()->GetVersion().data());
+            PluginInfo[U("author")]      = web::json::value::string(PLUGIN->GetPlugin()->GetAuthor().data());
+            PluginInfo[U("enabled")]     = web::json::value::boolean((*OrionIt)->IsPluginLoaded(PLUGIN_NAME));
+
+            Request.reply(web::http::status_codes::OK, PluginInfo);
+        }
+        else
+        {
+            // Get the list of plugins
+            const auto PLUGINS = (*OrionIt)->InspectPlugins();
+
+            auto PluginList = web::json::value::array();
+            for (const auto& PLUGIN : PLUGINS)
+            {
+                auto PluginInfo              = web::json::value::object();
+                PluginInfo[U("name")]        = web::json::value::string(PLUGIN->GetPlugin()->GetName().data());
+                PluginInfo[U("description")] = web::json::value::string(PLUGIN->GetPlugin()->GetDescription().data());
+                PluginInfo[U("version")]     = web::json::value::string(PLUGIN->GetPlugin()->GetVersion().data());
+                PluginInfo[U("author")]      = web::json::value::string(PLUGIN->GetPlugin()->GetAuthor().data());
+                PluginInfo[U("enabled")]     = web::json::value::boolean((*OrionIt)->IsPluginLoaded(PLUGIN->GetPlugin()->GetName()));
+
+                PluginList[PluginList.size()] = PluginInfo;
+            }
+
+            // Send the response
+            Request.reply(web::http::status_codes::OK, PluginList);
+        }
+    }
+    else if (Request.method() == web::http::methods::POST)
+    {
+        // Load or unload plugins
+
+        // Get the plugin names from the request body
+        Request.extract_json()
+            .then([this](const pplx::task<web::json::value>& ExtractJsonTask) { return ExtractJsonTask.get(); })
+            .then(
+                [this, Request, OrionIt](web::json::value JsonRequestBody)
+                {
+                    // Get the plugin name from the request body
+                    const auto PLUGINS = JsonRequestBody.as_array();
+
+                    // Load or unload the plugin
+                    auto JSuccessfullPlugins = web::json::value::array();
+                    auto JFailedPlugins      = web::json::value::array();
+
+                    for (const auto& PLUGIN : PLUGINS)
+                    {
+                        const auto PLUGIN_NAME = PLUGIN.at(U("name")).as_string();
+
+                        if (const auto ENABLED = PLUGIN.at(U("enabled")).as_bool())
+                        {
+                            if ((*OrionIt)->LoadPlugin(PLUGIN_NAME))
+                            {
+                                JSuccessfullPlugins[JSuccessfullPlugins.size()] = web::json::value::string(PLUGIN_NAME);
+                            }
+                            else
+                            {
+                                JFailedPlugins[JFailedPlugins.size()] = web::json::value::string(PLUGIN_NAME);
+                            }
+                        }
+                        else
+                        {
+                            if ((*OrionIt)->UnloadPlugin(PLUGIN_NAME))
+                            {
+                                JSuccessfullPlugins[JSuccessfullPlugins.size()] = web::json::value::string(PLUGIN_NAME);
+                            }
+                            else
+                            {
+                                JFailedPlugins[JFailedPlugins.size()] = web::json::value::string(PLUGIN_NAME);
+                            }
+                        }
+                    }
+
+                    if (JSuccessfullPlugins.size() > 0)
+                    {
+                        (*OrionIt)->RecalculateOrionTools();
+                    }
+
+                    auto JResult       = web::json::value::object();
+                    JResult["success"] = JSuccessfullPlugins;
+                    JResult["failed"]  = JFailedPlugins;
+
+                    // Send the response
+                    Request.reply(web::http::status_codes::MultiStatus, JResult);
+                });
+    }
 }
 
 void OrionWebServer::SendServerEvent(const OrionEventName& Event, const web::json::value& Data)

@@ -18,11 +18,11 @@
 // Include cmark headers
 #include <cmark.h>
 
-// Include standard headers
 #include "GUID.hpp"
 #include "Process.hpp"
-#include "tools/CodeInterpreterTool.hpp"
 
+// Include standard headers
+#include <dlfcn.h>
 #include <filesystem>
 #include <future>
 #include <thread>
@@ -226,6 +226,192 @@ void Orion::LoadAPIKeys()
     }
 }
 
+PluginModule* Orion::LoadPlugin(const std::string_view& PluginName)
+{
+    if (auto Plugin = InspectPlugin(PluginName))
+    {
+        Plugin->GetPlugin()->Load(*this);
+        m_Plugins.push_back(std::move(Plugin));
+
+        // RecalculateOrionTools must be called after loading a plugin
+        return m_Plugins.back().get();
+    }
+
+    return nullptr;
+}
+
+bool Orion::UnloadPlugin(const std::string_view& PluginName)
+{
+    // Iterate through the plugins and unload the one with the matching name
+    if (const auto PLUGIN_ITER = std::find_if(std::begin(m_Plugins), std::end(m_Plugins), [&](const auto& Plugin) { return Plugin->GetPlugin()->GetName() == PluginName; });
+        PLUGIN_ITER != std::end(m_Plugins))
+    {
+        (*PLUGIN_ITER)->Unload(true);
+        m_Plugins.erase(PLUGIN_ITER);
+
+        // RecalculateOrionTools must be called after unloading a plugin
+
+        return true;
+    }
+
+    return false;
+}
+
+bool Orion::IsPluginLoaded(const std::string_view& PluginName) const
+{
+    return std::any_of(std::begin(m_Plugins), std::end(m_Plugins), [&](const auto& Plugin) { return Plugin->GetPlugin()->GetName() == PluginName; });
+}
+
+std::unique_ptr<PluginModule> Orion::InspectPlugin(const std::string_view& PluginName) const
+{
+    // Iterate through the plugins and load the one with the matching name
+    constexpr auto PLUGINS_DIR = OrionWebServer::AssetDirectories::ResolveBasePluginDirectory();
+    for (const auto& Entry : std::filesystem::directory_iterator(PLUGINS_DIR))
+    {
+        auto PluginModule = std::make_unique<struct PluginModule>();
+        if (!PluginModule->Load(Entry.path().c_str(), *this))
+        {
+            continue;
+        }
+
+        if (PluginModule->GetPlugin()->GetName() != PluginName)
+        {
+            continue;
+        }
+
+        return std::move(PluginModule);
+    }
+
+    return nullptr;
+}
+
+std::vector<std::unique_ptr<PluginModule>> Orion::InspectPlugins() const
+{
+    std::vector<std::unique_ptr<PluginModule>> Plugins;
+
+    std::cout << "Searching for plugins in: " << OrionWebServer::AssetDirectories::ResolveBasePluginDirectory() << std::endl;
+
+    // Iterate through the plugins and load the one with the matching name
+    constexpr auto PLUGINS_DIR = OrionWebServer::AssetDirectories::ResolveBasePluginDirectory();
+    for (const auto& Entry : std::filesystem::directory_iterator(PLUGINS_DIR))
+    {
+        std::cout << "Plugin Module: " << Entry.path().filename() << std::endl;
+
+        auto PluginModule = std::make_unique<struct PluginModule>();
+
+        if (!PluginModule->Load(Entry.path().c_str(), *this))
+        {
+            continue;
+        }
+
+        Plugins.push_back(std::move(PluginModule));
+    }
+
+    return Plugins;
+}
+
+void Orion::RecalculateOrionTools()
+{
+    // Update the assistant
+    web::http::http_request UpdateAssistantRequest(web::http::methods::POST);
+    UpdateAssistantRequest.set_request_uri(U("assistants/" + m_CurrentAssistantID));
+    UpdateAssistantRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+    UpdateAssistantRequest.headers().add("OpenAI-Beta", "assistants=v2");
+    UpdateAssistantRequest.headers().add("Content-Type", "application/json");
+
+    web::json::value UpdateAssistantRequestBody = web::json::value::object();
+    UpdateAssistantRequestBody["description"]   = web::json::value::string(m_Description);
+    UpdateAssistantRequestBody["model"]         = web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
+
+    web::json::value Tools = web::json::value::array();
+    if (!m_Tools.empty())
+    {
+        for (const auto& Tool : m_Tools)
+        {
+            printf("Adding tool: %s\n", Tool->GetName().c_str());
+            Tools[Tools.size()] = web::json::value::parse(Tool->ToJson());
+        }
+    }
+
+    std::vector<std::string> ToolInstructions;
+    if (!m_Plugins.empty())
+    {
+        for (const auto& Plugin : m_Plugins)
+        {
+            const auto TOOLS = Plugin->GetPlugin()->GetTools();
+            for (const auto& Tool : TOOLS)
+            {
+                printf("Adding tool: %s\n", Tool->GetName().c_str());
+                Tools[Tools.size()] = web::json::value::parse(Tool->ToJson());
+            }
+            ToolInstructions.push_back(Plugin->GetPlugin()->GetToolInstructions().data());
+        }
+    }
+
+    // Concatenate the tool instructions
+    const auto CRUDE_INSTRUCTIONS = std::accumulate(std::begin(ToolInstructions),
+                                                    std::end(ToolInstructions),
+                                                    std::string(Defaults::INSTRUCTIONS),
+                                                    [](const std::string& Prev, const std::string& Next) { return Prev + "\n\n" + Next; });
+
+    std::cout << "CRUDE_INSTRUCTIONS: " << std::endl << CRUDE_INSTRUCTIONS << std::endl;
+
+    // Request gpt-3.5-turbo to generate a cohesive instruction set
+    web::http::http_request GenerateInstructionsRequest(web::http::methods::POST);
+    GenerateInstructionsRequest.set_request_uri(U("chat/completions"));
+    GenerateInstructionsRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
+    GenerateInstructionsRequest.headers().add("OpenAI-Beta", "assistants=v2");
+    GenerateInstructionsRequest.headers().add("Content-Type", "application/json");
+
+    // Set the prompt
+    const std::string SYSTEM_PROMPT = "You are an expert at creating optimized instruction prompts for gpt-3.5-turbo. "
+                                      "Given an unoptimized, crude instruction prompt, you ALWAYS provide a more coherent "
+                                      "and concise set of instructions that allow the AI to perform the task more effectively. "
+                                      "You take advantage of the latest techniques and strategies to create the most effective "
+                                      "instruction set possible, including rewording/rewriting. You can do this because you understand "
+                                      "intimately how to communicate with the AI in a way that it can understand "
+                                      "and know how to create the perfect instruction set that will allow the AI to perform the task optimally."
+                                      "You MUST NOT leave out any details from the user's unoptimized, crude instruction prompt. Your version MUST appropriately adhere to the "
+                                      "basic outline of the users prompt. "
+                                      "The following user message is an unoptimized instruction prompt that you need to optimize. ";
+
+    auto SystemMessage       = web::json::value::object();
+    SystemMessage["role"]    = web::json::value::string("system");
+    SystemMessage["content"] = web::json::value::string(SYSTEM_PROMPT);
+
+    auto UserMessage       = web::json::value::object();
+    UserMessage["role"]    = web::json::value::string("user");
+    UserMessage["content"] = web::json::value::string(CRUDE_INSTRUCTIONS);
+
+    web::json::value GenerateInstructionsRequestBody = web::json::value::object();
+    GenerateInstructionsRequestBody["model"]         = web::json::value::string("gpt-3.5-turbo");
+    GenerateInstructionsRequestBody["messages"]      = web::json::value::array({ SystemMessage, UserMessage });
+
+    // Set the body
+    GenerateInstructionsRequest.set_body(GenerateInstructionsRequestBody);
+
+    // Send the request and get the response
+    const auto GENERATE_INSTRUCTIONS_RESPONSE = m_OpenAIClient->request(GenerateInstructionsRequest).get();
+    if (GENERATE_INSTRUCTIONS_RESPONSE.status_code() != web::http::status_codes::OK)
+    {
+        std::cerr << "Failed to generate instructions:" << std::endl << GENERATE_INSTRUCTIONS_RESPONSE.to_string() << std::endl;
+        return;
+    }
+
+    m_Instructions = GENERATE_INSTRUCTIONS_RESPONSE.extract_json().get().at("choices").as_array().at(0).at("message").at("content").as_string();
+
+    UpdateAssistantRequestBody["instructions"] = web::json::value::string(m_Instructions);
+    UpdateAssistantRequestBody["tools"]        = Tools;
+
+    UpdateAssistantRequest.set_body(UpdateAssistantRequestBody);
+
+    if (const web::http::http_response UPDATE_ASSISTANT_RESPONSE = m_OpenAIClient->request(UpdateAssistantRequest).get();
+        UPDATE_ASSISTANT_RESPONSE.status_code() != web::http::status_codes::OK)
+    {
+        std::cerr << "Failed to update the assistant:" << std::endl << UPDATE_ASSISTANT_RESPONSE.to_string() << std::endl;
+    }
+}
+
 pplx::task<void> Orion::SendMessageAsync(const std::string& Message, const web::json::array& Files)
 {
     // Cancel current assistant run
@@ -413,39 +599,7 @@ void Orion::CreateAssistant()
 
     if (DoesAssistantExist)
     {
-        // Update the assistant
-        web::http::http_request UpdateAssistantRequest(web::http::methods::POST);
-        UpdateAssistantRequest.set_request_uri(U("assistants/" + m_CurrentAssistantID));
-        UpdateAssistantRequest.headers().add("Authorization", "Bearer " + m_OpenAIAPIKey);
-        UpdateAssistantRequest.headers().add("OpenAI-Beta", "assistants=v2");
-        UpdateAssistantRequest.headers().add("Content-Type", "application/json");
-
-        web::json::value UpdateAssistantRequestBody = web::json::value::object();
-        UpdateAssistantRequestBody["instructions"]  = web::json::value::string(m_Instructions);
-        UpdateAssistantRequestBody["description"]   = web::json::value::string(m_Description);
-        UpdateAssistantRequestBody["model"]         = web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
-
-        if (!m_Tools.empty())
-        {
-            web::json::value Tools = web::json::value::array();
-            for (const auto& Tool : m_Tools)
-            {
-                printf("Adding tool: %s\n", Tool->GetName().c_str());
-                Tools[Tools.size()] = web::json::value::parse(Tool->ToJson());
-            }
-            UpdateAssistantRequestBody["tools"] = Tools;
-        }
-
-        UpdateAssistantRequest.set_body(UpdateAssistantRequestBody);
-
-        if (const web::http::http_response UPDATE_ASSISTANT_RESPONSE = m_OpenAIClient->request(UpdateAssistantRequest).get();
-            UPDATE_ASSISTANT_RESPONSE.status_code() != web::http::status_codes::OK)
-        {
-            std::cerr << "Failed to update the assistant" << std::endl;
-
-            // Print the response
-            std::cout << UPDATE_ASSISTANT_RESPONSE.to_string() << std::endl;
-        }
+        RecalculateOrionTools();
     }
     else
     {
@@ -462,32 +616,19 @@ void Orion::CreateAssistant()
         CreateAssistantRequestBody["description"]   = web::json::value::string(m_Description);
         CreateAssistantRequestBody["model"]         = web::json::value::string(m_CurrentIntelligence == EOrionIntelligence::Base ? "gpt-3.5-turbo" : "gpt-4-turbo-preview");
 
-        if (!m_Tools.empty())
-        {
-            web::json::value Tools = web::json::value::array();
-            for (const auto& Tool : m_Tools)
-            {
-                printf("Adding tool: %s\n", Tool->GetName().c_str());
-                Tools[Tools.size()] = web::json::value::parse(Tool->ToJson());
-            }
-            CreateAssistantRequestBody["tools"] = Tools;
-        }
-
         CreateAssistantRequest.set_body(CreateAssistantRequestBody);
 
-        if (const web::http::http_response CREATE_ASSISTANT_RESPONSE = m_OpenAIClient->request(CreateAssistantRequest).get();
-            CREATE_ASSISTANT_RESPONSE.status_code() == web::http::status_codes::OK)
+        const web::http::http_response CREATE_ASSISTANT_RESPONSE = m_OpenAIClient->request(CreateAssistantRequest).get();
+        if (CREATE_ASSISTANT_RESPONSE.status_code() != web::http::status_codes::OK)
         {
-            web::json::value Json = CREATE_ASSISTANT_RESPONSE.extract_json().get();
-            m_CurrentAssistantID  = Json.at("id").as_string();
+            std::cerr << "Failed to create a new assistant:" << std::endl << CREATE_ASSISTANT_RESPONSE.to_string() << std::endl;
         }
-        else
-        {
-            std::cerr << "Failed to create a new assistant" << std::endl;
 
-            // Print the response
-            std::cout << CREATE_ASSISTANT_RESPONSE.to_string() << std::endl;
-        }
+        web::json::value Json = CREATE_ASSISTANT_RESPONSE.extract_json().get();
+        m_CurrentAssistantID  = Json.at("id").as_string();
+
+        // Recalculate the Orion tools
+        RecalculateOrionTools();
     }
 }
 
@@ -1099,12 +1240,36 @@ void Orion::ProcessOpenAIEventStream(const concurrency::streams::istream& EventS
                             const auto TOOL_NAME         = JFunctionToolCall.at("name").as_string();
                             const auto TOOL_ARGS         = web::json::value::parse(JFunctionToolCall.at("arguments").as_string());
 
-                            auto ToolIt = std::find_if(m_Tools.begin(), m_Tools.end(), [TOOL_NAME](const auto& Tool) { return Tool->GetName() == TOOL_NAME; });
+                            IOrionTool* pTool = nullptr;
+                            if (const auto TOOL_IT = std::find_if(m_Tools.begin(), m_Tools.end(), [TOOL_NAME](const auto& Tool) { return Tool->GetName() == TOOL_NAME; });
+                                TOOL_IT != std::end(m_Tools))
+                            {
+                                pTool = TOOL_IT->get();
+                            }
 
-                            if (ToolIt != m_Tools.end())
+                            // If the tool is not found, it might be a plugin
+                            if (!pTool)
+                            {
+                                // Get the tool from the plugin. First, Iterate through the plugins and for each plugin, iterate through the tools to find the tool.  use std::find
+                                // to find the tool
+                                for (const auto& Plugin : m_Plugins)
+                                {
+                                    const auto PLUGIN_TOOLS = Plugin->GetPlugin()->GetTools();
+
+                                    if (const auto PLUGIN_TOOL_ITER =
+                                            std::find_if(PLUGIN_TOOLS.begin(), PLUGIN_TOOLS.end(), [TOOL_NAME](const auto& Tool) { return Tool->GetName() == TOOL_NAME; });
+                                        PLUGIN_TOOL_ITER != std::end(PLUGIN_TOOLS))
+                                    {
+                                        pTool = (*PLUGIN_TOOL_ITER);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (pTool)
                             {
                                 // Get the tool
-                                if (auto pFunctionTool = dynamic_cast<FunctionTool*>(ToolIt->get()); !pFunctionTool)
+                                if (auto pFunctionTool = dynamic_cast<FunctionTool*>(pTool); !pFunctionTool)
                                 {
                                     std::cout << __func__ << ": Tool is not a function tool: " << TOOL_NAME << std::endl;
 

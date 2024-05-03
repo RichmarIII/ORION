@@ -1,0 +1,1 @@
+basic_plugin(FileSystem SearchFilesystemFunctionTool.hpp SearchFilesystemFunctionTool.cpp FileSystemPlugin.hpp FileSystemPlugin.cpp)

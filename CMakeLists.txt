@@ -8,10 +8,11 @@ set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/Orion")
 
 add_subdirectory(library)
 add_subdirectory(application)
+add_subdirectory(plugins)
 
 # Meta target that builds both the library and the application
 add_custom_target(ORION ALL COMMENT "Building ORION: Library and Application")
-add_dependencies(ORION Orion OrionServer)
+add_dependencies(ORION Orion OrionServer Plugins)
 
 # Export the targets to a script
 install(EXPORT OrionTargets

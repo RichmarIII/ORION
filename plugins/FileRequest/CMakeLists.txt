@@ -1,0 +1,1 @@
+basic_plugin(FileRequest RequestFileUploadFromUserFunctionTool.hpp RequestFileUploadFromUserFunctionTool.cpp FileRequestPlugin.hpp FileRequestPlugin.cpp)

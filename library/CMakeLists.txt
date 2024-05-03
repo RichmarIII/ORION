@@ -13,26 +13,10 @@ add_custom_target(ssl_certificates DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/cert.pem 
 set(SOURCES
         src/Orion.cpp
         src/OrionWebServer.cpp
-        src/tools/TakeScreenshotFunctionTool.cpp
-        src/tools/SearchFilesystemFunctionTool.cpp
-        src/tools/GetWeatherFunctionTool.cpp
-        src/tools/WebSearchFunctionTool.cpp
-        src/tools/ChangeVoiceFunctionTool.cpp
-        src/tools/ChangeIntelligenceFunctionTool.cpp
-        src/tools/ListSmartDevicesFunctionTool.cpp
-        src/tools/ExecSmartDeviceServiceFunctionTool.cpp
-        src/tools/NavigateLinkFunctionTool.cpp
-        src/tools/DownloadHTTPFileFunctionTool.cpp
-        src/tools/CreateAutonomousActionPlanFunctionTool.cpp
-        src/tools/RequestFileUploadFromUserFunctionTool.cpp
-        src/tools/RememberKnowledgeFunctionTool.cpp
-        src/tools/RecallKnowledgeFunctionTool.cpp
-        src/tools/UpdateKnowledgeFunctionTool.cpp
         src/MimeTypes.cpp
         src/GUID.cpp
-
-        ${ASSETS_CPP_FILE} # This is the generated .cpp file to trigger post-build copy assets command
         src/Process.cpp
+        src/Plugin.cpp
 )
 
 # Explicitly list your header files
@@ -44,27 +28,13 @@ set(HEADERS
         include/OrionWebServer.hpp
         include/User.hpp
         include/Knowledge.hpp
-        include/tools/ChangeIntelligenceFunctionTool.hpp
-        include/tools/ChangeVoiceFunctionTool.hpp
         include/tools/CodeInterpreterTool.hpp
-        include/tools/DownloadHTTPFileFunctionTool.hpp
-        include/tools/ExecSmartDeviceServiceFunctionTool.hpp
         include/tools/FunctionTool.hpp
-        include/tools/GetWeatherFunctionTool.hpp
-        include/tools/ListSmartDevicesFunctionTool.hpp
-        include/tools/NavigateLinkFunctionTool.hpp
         include/tools/RetrievalTool.hpp
-        include/tools/SearchFilesystemFunctionTool.hpp
-        include/tools/TakeScreenshotFunctionTool.hpp
-        include/tools/WebSearchFunctionTool.hpp
-        include/tools/CreateAutonomousActionPlanFunctionTool.hpp
-        include/tools/RequestFileUploadFromUserFunctionTool.hpp
-        include/tools/RememberKnowledgeFunctionTool.hpp
-        include/tools/RecallKnowledgeFunctionTool.hpp
-        include/tools/UpdateKnowledgeFunctionTool.hpp
         include/MiscConstants.hpp
         include/ETTSAudioFormat.hpp
         include/Process.hpp
+        include/Plugin.hpp
 )
 
 # Define the library
@@ -86,9 +56,6 @@ FetchContent_Declare(sqlite_modern_cpp GIT_REPOSITORY git@github.com:SqliteModer
 FetchContent_GetProperties(sqlite3)
 if (NOT sqlite3_POPULATED)
     FetchContent_Populate(sqlite3)
-    message(STATUS "sqlite3_SOURCE_DIR: ${sqlite3_SOURCE_DIR}")
-    message(STATUS "sqlite3_BINARY_DIR: ${sqlite3_BINARY_DIR}")
-
     add_custom_command(
             OUTPUT ${sqlite3_BINARY_DIR}/install/lib/libsqlite3.so
             COMMAND cd ${sqlite3_BINARY_DIR}
@@ -129,31 +96,45 @@ set(SQLITE_MODERN_CPP_INCLUDE_DIR ${SQLITE_MODERN_CPP_SOURCE_DIR}/hdr)
 target_include_directories(Orion PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CPPRESTSDK_INCLUDE_DIR}>
+        $<BUILD_INTERFACE:${MYHTML_INCLUDE_DIR}>
 
         $<INSTALL_INTERFACE:include/Orion>
+        $<INSTALL_INTERFACE:include/Orion/third_party/cpprestsdk>
+        $<INSTALL_INTERFACE:include/Orion/third_party/myhtml>
+
 )
 target_include_directories(Orion PRIVATE
-        $<BUILD_INTERFACE:${MYHTML_INCLUDE_DIR}>
         $<BUILD_INTERFACE:${CMARK_INCLUDE_DIR}>
         $<BUILD_INTERFACE:${SQLITE3_INCLUDE_DIR}>
         $<BUILD_INTERFACE:${SQLITE_MODERN_CPP_INCLUDE_DIR}>
-        $<INSTALL_INTERFACE:include/Orion>
 )
 
 target_link_libraries(Orion PUBLIC
         cpprest
+        myhtml
+        crypto
 )
 
 target_link_libraries(Orion PRIVATE
-        myhtml
         cmark
         ${SQLITE3_LIBRARY}
 )
 
+# Set the targets Plugin Directory (where the plugins will be installed). This should be accessible by the plugins
+set_property(GLOBAL PROPERTY PLUGIN_DIR ${CMAKE_INSTALL_PREFIX}/share/Orion/plugins)
+
 # Install the dependencies
 
 # Install the library
-install(TARGETS Orion cpprest myhtml cmark
+install(TARGETS
+        Orion
+        cpprest
+        cpprestsdk_openssl_internal
+        cpprestsdk_websocketpp_internal
+        cpprestsdk_boost_internal
+        myhtml
+        cmark
+
         EXPORT OrionTargets
         LIBRARY DESTINATION lib/Orion
         ARCHIVE DESTINATION lib/Orion
@@ -165,6 +146,8 @@ install(TARGETS Orion cpprest myhtml cmark
 
 # Install the header files
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION include/Orion)
+install(DIRECTORY ${CPPRESTSDK_INCLUDE_DIR}/ DESTINATION include/Orion/third_party/cpprestsdk)
+install(DIRECTORY ${MYHTML_INCLUDE_DIR}/ DESTINATION include/Orion/third_party/myhtml)
 
 # Install the ssl certificates
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cert.pem ${CMAKE_CURRENT_SOURCE_DIR}/key.pem DESTINATION bin)

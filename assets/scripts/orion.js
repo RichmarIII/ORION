@@ -647,7 +647,7 @@ document.getElementById('new-chat-button').addEventListener('click', function ()
     alert('New chat functionality to be implemented');
 });
 
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
 
     // Start processing the Orion speak queue
     startProcessingOrionSpeakQueueAsync();
@@ -663,6 +663,23 @@ document.addEventListener('DOMContentLoaded', function () {
         // Redirect to the login page
         window.location.href = '/assets/html/login.html';
     }
+
+    const plugins = await OrionAPI.getAvailablePluginsAsync();
+
+    // Log the plugins
+    console.log('Plugins available:', plugins);
+
+    // Generate the modified plugins
+    const modifiedPlugins = plugins.map(plugin => {
+        return {
+            name: plugin.name,
+            enabled: true
+        };
+    });
+
+    const plugins_results = await OrionAPI.modifyPluginsAsync(modifiedPlugins);
+
+    console.log('Plugins enabled:', plugins_results);
 
     // Get the chat area
     const chatArea = document.getElementById('chat-area');

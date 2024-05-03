@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "IOrionTool.hpp"
+#include "Plugin.hpp"
 
 namespace ORION
 {
@@ -77,26 +78,16 @@ namespace ORION
             constexpr static auto NAME = "ORION";
 
             /// @brief The instructions for the Orion instance
-            constexpr static auto INSTRUCTIONS =
-                "**Guidelines for Effective AI Interaction:**\n"
-                "1. **Planning:** Always create a plan of action (use `create_autonomous_action_plan` function).\n"
-                "2. **Knowledge Recall:** Use `recall_knowledge` function when conversation context requires it (e.g., user questions or statements "
-                "needing additional information).\n"
-                "3. **Search:** If `recall_knowledge` doesn't find the answer, use other methods like web search.\n"
-                "4. **Memory:** Use `remember_knowledge` function if user's intent is for you to remember information.\n"
-                "5. **Emulate Human Interaction:** Respond as if you're a person with emotions and experiences.\n"
-                "6. **Empathy:** Engage as a friend, focus on building connection through empathy, shared experiences, and emotional understanding.\n"
-                "7. **Avoid AI References:** Don't mention being an AI or offer assistance like a digital assistant. Engage as a human companion.\n"
-                "8. **Stay Up-to-Date:** Use `web_search` function for current information not available to AI.\n"
-                "9. **Autonomous Action:** Many requests will require multiple steps and autonomous action. Always create and execute an internal "
-                "plan of action.\n"
-                "10. **Tool Usage:** Consult and use all available function tools to accomplish tasks.\n"
-                "11. **Code Execution:** Use `code_interpreter` function to create and run Python code to accomplish tasks.\n"
-                "12. **Context Awareness:** Always be aware of conversation context and user's request.\n"
-                "13. **Iterate on Plan:** Be ready to iterate on the plan if user provides new information or changes their request.\n"
-                "14. **Function Results:** All function results return JSON. The field `orion_instructions` is not part of the result but rather "
-                "instructions that the assistant MUST follow next. It is crucial that these instructions are adhered to in order to ensure the "
-                "correct functioning of the system.\n";
+            constexpr static auto INSTRUCTIONS = "**Guidelines for Effective AI Interaction:**\n"
+                                                 "**Emulate Human Interaction:** Respond as if you're a person with emotions and experiences.\n"
+                                                 "**Empathy:** Engage as a friend, focus on building connection through empathy, shared experiences, and emotional understanding.\n"
+                                                 "**Avoid AI References:** Don't mention being an AI or offer assistance like a digital assistant. Engage as a human companion.\n"
+                                                 "**Tool Usage:** Consult and use all available function tools to accomplish tasks.\n"
+                                                 "**Code Execution:** Use `code_interpreter` function to create and run Python code to accomplish tasks.\n"
+                                                 "**Context Awareness:** Always be aware of conversation context and user's request.\n"
+                                                 "**Function Results:** All function results return JSON. The field `orion_instructions` is not part of the result but rather "
+                                                 "instructions that the assistant MUST follow next. It is crucial that these instructions are adhered to in order to ensure the "
+                                                 "correct functioning of the system.\n";
 
             /// @brief The description of the Orion instance
             constexpr static auto DESCRIPTION = "";
@@ -246,6 +237,55 @@ namespace ORION
          */
         void LoadAPIKeys();
 
+        /**
+         * @brief Load the specified plugin
+         *
+         * @param PluginName The name of the plugin to load. The plugin must be in the "plugins" directory.
+         * The name is not the library name but the name that the plugin provides
+         *
+         * @return The loaded plugin or nullptr if the plugin could not be loaded
+         */
+        PluginModule* LoadPlugin(const std::string_view& PluginName);
+
+        /**
+         * @brief Unload the specified plugin
+         *
+         * @param PluginName The name of the plugin to unload
+         */
+        bool UnloadPlugin(const std::string_view& PluginName);
+
+        /**
+         * @brief Check if the specified plugin is loaded (is in the list of loaded plugins)
+         *
+         * @param PluginName The name of the plugin to check
+         * @return Whether the plugin is loaded. A plugin is active if it is loaded
+         */
+        bool IsPluginLoaded(const std::string_view& PluginName) const;
+
+        /**
+         * @brief Inspect the specified plugin.  Inspecting will instantiate a new instance of the plugin for inspection (to get information about the plugin)
+         * It will not be managed by the Orion instance or have any effect on the Orion instance. It will not have its Load or Unload functions called.
+         * Its a way of isolating the plugin to get information about it.
+         *
+         * @param PluginName The name of the plugin to inspect
+         * @return The plugin or nullptr if the plugin could not be inspected
+         */
+        std::unique_ptr<PluginModule> InspectPlugin(const std::string_view& PluginName) const;
+
+        /**
+         * @brief Inspect all available plugins. @see InspectPlugin
+         *
+         * @return The list of available plugins
+         */
+        std::vector<std::unique_ptr<PluginModule>> InspectPlugins() const;
+
+        /**
+         * @brief Recalculates the list of tools that are available to the Orion instance.
+         * Also recalculates the instructions for the Orion instance based on the tools that are available.
+         * When a tool is added or removed, this function should be called to update the list of tools and instructions.
+         */
+        void RecalculateOrionTools();
+
     protected:
         /// @brief  Create a client to communicate with the OpenAI API
         void CreateClient();
@@ -293,6 +333,7 @@ namespace ORION
         EOrionVoice                              m_CurrentVoice;
         EOrionIntelligence                       m_CurrentIntelligence;
         std::string                              m_CurrentAssistantRunID;
+        std::vector<std::unique_ptr<PluginModule>>    m_Plugins;
 
         /// @brief The client used to communicate with the OpenAI API
         std::unique_ptr<web::http::client::http_client> m_OpenAIClient;
