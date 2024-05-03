@@ -1,4 +1,4 @@
-![ubuntu-latest](https://github.com/RichmarIII/ORION/actions/workflows/cmake-multi-platform.yml/badge.svg?branch=main)
+![ubuntu-latest](https://github.com/RichmarIII/ORION/actions/workflows/ubuntu-latest.yml/badge.svg?branch=main)
 
 ## ORION: Operational Reasoning and Intelligence Optimized Nexus
 
