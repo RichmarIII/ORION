@@ -1,4 +1,4 @@
-![ubuntu-latest](https://github.com/RichmarIII/ORION/actions/workflows/ubuntu-latest.yml/badge.svg?branch=main)
+![Ubuntu-Latest Compiling](https://github.com/RichmarIII/ORION/actions/workflows/ubuntu-latest.yml/badge.svg?branch=main)
 
 ## ORION: Operational Reasoning and Intelligence Optimized Nexus
 
