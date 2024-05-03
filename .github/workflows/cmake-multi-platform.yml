@@ -47,6 +47,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Cache
+      uses: actions/cache@v4.0.2
+      with:
+        # A list of files, directories, and wildcard patterns to cache and restore
+        path: "${{ steps.strings.outputs.build-output-dir }}/_deps"
+        # An explicit key for restoring and saving the cache
+        key: cached
+
     - name: Set reusable strings
       # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
       id: strings
@@ -56,7 +64,7 @@ jobs:
 
     - name: Install Troublesome Dependencies
       if: matrix.os == 'ubuntu-latest'
-      run: chmod +x ${{ github.workspace }}/install_dependencies.sh & ${{ github.workspace }}/install_dependencies.sh
+      run: ${{ github.workspace }}/install_dependencies.sh
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
