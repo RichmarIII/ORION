@@ -45,6 +45,7 @@ include(FetchContent)
 message(STATUS "Github Token: " ${GITHUB_TOKEN})
 
 if (NOT DEFINED GITHUB_TOKEN)
+    FetchContent_Declare(boost GIT_REPOSITORY git@github.com:boostorg/boost.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(myhtml GIT_REPOSITORY git@github.com:lexborisov/myhtml.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(cpprestsdk GIT_REPOSITORY git@github.com:microsoft/cpprestsdk.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(cmark GIT_REPOSITORY git@github.com:commonmark/cmark.git EXCLUDE_FROM_ALL)
@@ -55,6 +56,7 @@ if (NOT DEFINED GITHUB_TOKEN)
     )
     FetchContent_Declare(sqlite_modern_cpp GIT_REPOSITORY git@github.com:SqliteModernCpp/sqlite_modern_cpp.git EXCLUDE_FROM_ALL)
 else ()
+    FetchContent_Declare(boost GIT_REPOSITORY https://${GITHUB_TOKEN}@github.com/boostorg/boost.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(myhtml GIT_REPOSITORY https://${GITHUB_TOKEN}@github.com/lexborisov/myhtml.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(cpprestsdk GIT_REPOSITORY https://${GITHUB_TOKEN}@github.com/microsoft/cpprestsdk.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(cmark GIT_REPOSITORY https://${GITHUB_TOKEN}@github.com/commonmark/cmark.git EXCLUDE_FROM_ALL)
@@ -86,6 +88,7 @@ add_custom_target(sqlite3_build ALL DEPENDS ${sqlite3_BINARY_DIR}/install/lib/li
 add_dependencies(Orion sqlite3_build ssl_certificates)
 
 FetchContent_MakeAvailable(
+        boost
         myhtml
         cpprestsdk
         cmark
