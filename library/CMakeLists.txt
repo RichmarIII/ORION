@@ -89,6 +89,12 @@ add_dependencies(Orion sqlite3_build ssl_certificates)
 
 FetchContent_MakeAvailable(
         boost
+)
+
+# Set the CMAKE_PREFIX_PATH to the location of the boost installation so that the cpprestsdk can find it
+set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${boost_SOURCE_DIR})
+
+FetchContent_MakeAvailable(
         myhtml
         cpprestsdk
         cmark
