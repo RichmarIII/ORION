@@ -44,7 +44,7 @@ include(FetchContent)
 
 message(STATUS "Github Token: " ${GITHUB_TOKEN})
 
-if (NOT DEFINED ${GITHUB_TOKEN})
+if (NOT DEFINED GITHUB_TOKEN)
     FetchContent_Declare(myhtml GIT_REPOSITORY git@github.com:lexborisov/myhtml.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(cpprestsdk GIT_REPOSITORY git@github.com:microsoft/cpprestsdk.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(cmark GIT_REPOSITORY git@github.com:commonmark/cmark.git EXCLUDE_FROM_ALL)
