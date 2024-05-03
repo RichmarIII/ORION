@@ -42,9 +42,6 @@ add_library(Orion SHARED ${HEADERS} ${SOURCES})
 
 include(FetchContent)
 
-# execute install_boost.sh
-#execute_process(COMMAND ${CMAKE_SOURCE_DIR}/install_boost.sh)
-
 if (NOT DEFINED GITHUB_TOKEN)
     FetchContent_Declare(myhtml GIT_REPOSITORY git@github.com:lexborisov/myhtml.git EXCLUDE_FROM_ALL)
     FetchContent_Declare(cpprestsdk GIT_REPOSITORY git@github.com:microsoft/cpprestsdk.git EXCLUDE_FROM_ALL)
@@ -92,8 +89,6 @@ FetchContent_MakeAvailable(
         cmark
         sqlite_modern_cpp
 )
-
-
 
 get_target_property(MYHTML_SOURCE_DIR myhtml SOURCE_DIR)
 set(MYHTML_INCLUDE_DIR ${MYHTML_SOURCE_DIR}/include)
@@ -170,13 +165,3 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cert.pem ${CMAKE_CURRENT_SOURCE_DIR}/k
 
 # Install the assets
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/assets DESTINATION share/Orion)
-
-# Install the api keys
-install(FILES
-        ${CMAKE_SOURCE_DIR}/.openai_api_key.txt
-        ${CMAKE_SOURCE_DIR}/.openweather_api_key.txt
-        ${CMAKE_SOURCE_DIR}/.hass_api_key.txt
-        ${CMAKE_SOURCE_DIR}/.google_api_key.txt
-        ${CMAKE_SOURCE_DIR}/.google_cse_id.txt
-        DESTINATION bin
-)
