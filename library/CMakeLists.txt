@@ -40,7 +40,8 @@ set(HEADERS
 # Define the library
 add_library(Orion SHARED ${HEADERS} ${SOURCES})
 
-# If you need to link against libraries, do so here
+# Print out a operating system environment variable
+message(STATUS "GITHUB_TOKEN: $ENV{GITHUB_TOKEN}")
 
 include(FetchContent)
 FetchContent_Declare(myhtml GIT_REPOSITORY git@github.com:lexborisov/myhtml.git EXCLUDE_FROM_ALL)
