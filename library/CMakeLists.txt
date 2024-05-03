@@ -40,19 +40,30 @@ set(HEADERS
 # Define the library
 add_library(Orion SHARED ${HEADERS} ${SOURCES})
 
-# Print out a operating system environment variable
-message(STATUS "GITHUB_TOKEN: $ENV{GITHUB_TOKEN}")
-
 include(FetchContent)
-FetchContent_Declare(myhtml GIT_REPOSITORY git@github.com:lexborisov/myhtml.git EXCLUDE_FROM_ALL)
-FetchContent_Declare(cpprestsdk GIT_REPOSITORY git@github.com:microsoft/cpprestsdk.git EXCLUDE_FROM_ALL)
-FetchContent_Declare(cmark GIT_REPOSITORY git@github.com:commonmark/cmark.git EXCLUDE_FROM_ALL)
-FetchContent_Declare(
-        sqlite3
-        URL https://www.sqlite.org/src/zip/sqlite.zip?r=release
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE EXCLUDE_FROM_ALL
-)
-FetchContent_Declare(sqlite_modern_cpp GIT_REPOSITORY git@github.com:SqliteModernCpp/sqlite_modern_cpp.git EXCLUDE_FROM_ALL)
+
+if (NOT DEFINED $ENV{GITHUB_TOKEN})
+    FetchContent_Declare(myhtml GIT_REPOSITORY git@github.com:lexborisov/myhtml.git EXCLUDE_FROM_ALL)
+    FetchContent_Declare(cpprestsdk GIT_REPOSITORY git@github.com:microsoft/cpprestsdk.git EXCLUDE_FROM_ALL)
+    FetchContent_Declare(cmark GIT_REPOSITORY git@github.com:commonmark/cmark.git EXCLUDE_FROM_ALL)
+    FetchContent_Declare(
+            sqlite3
+            URL https://www.sqlite.org/src/zip/sqlite.zip?r=release
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE EXCLUDE_FROM_ALL
+    )
+    FetchContent_Declare(sqlite_modern_cpp GIT_REPOSITORY git@github.com:SqliteModernCpp/sqlite_modern_cpp.git EXCLUDE_FROM_ALL)
+else ()
+    FetchContent_Declare(myhtml GIT_REPOSITORY https://$ENV{GITHUB_TOKEN}@github.com/lexborisov/myhtml.git EXCLUDE_FROM_ALL)
+    FetchContent_Declare(cpprestsdk GIT_REPOSITORY https://$ENV{GITHUB_TOKEN}@github.com/microsoft/cpprestsdk.git EXCLUDE_FROM_ALL)
+    FetchContent_Declare(cmark GIT_REPOSITORY https://$ENV{GITHUB_TOKEN}@github.com/commonmark/cmark.git EXCLUDE_FROM_ALL)
+    FetchContent_Declare(
+            sqlite3
+            URL https://www.sqlite.org/src/zip/sqlite.zip?r=release
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE EXCLUDE_FROM_ALL
+    )
+    FetchContent_Declare(sqlite_modern_cpp GIT_REPOSITORY https://$ENV{GITHUB_TOKEN}@github.com/SqliteModernCpp/sqlite_modern_cpp.git EXCLUDE_FROM_ALL)
+endif ()
+
 
 FetchContent_GetProperties(sqlite3)
 if (NOT sqlite3_POPULATED)
